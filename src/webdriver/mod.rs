@@ -3,7 +3,7 @@ mod questions;
 mod signin;
 
 pub use crate::webdriver::get_state::State;
-use crate::webdriver::questions::{click_next, skip, start_intro};
+use crate::webdriver::questions::{choose_answer, click_next, skip, start_intro};
 use crate::webdriver::signin::browser_login;
 use get_state::get_state as driver_get_state;
 use std::env;
@@ -48,6 +48,7 @@ pub enum Signal {
     StartLanguage,
     Skip,
     ClickNext,
+    ChooseAnswer(String),
 }
 
 #[derive(Debug)]
@@ -59,6 +60,7 @@ pub enum Response {
     WebDriverError(WebDriverError),
     Success,
     SkipResponse(String),
+    ChooseAnswerResponse(Option<String>),
 }
 
 impl Response {
@@ -132,6 +134,15 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                 Signal::ClickNext => {
                     match click_next(&driver).await {
                         Ok(_) => sender.send(Response::Success).await.unwrap(),
+                        Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
+                    };
+                }
+                Signal::ChooseAnswer(ans) => {
+                    match choose_answer(&driver, ans).await {
+                        Ok(opt) => sender
+                            .send(Response::ChooseAnswerResponse(opt))
+                            .await
+                            .unwrap(),
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
                 }
@@ -217,6 +228,24 @@ pub async fn next(tx: &WebdriverSender) -> Result<(), Error> {
             Response::Success => {
                 tokio::time::sleep(Duration::from_secs(5)).await;
                 Ok(())
+            }
+            Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
+            _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),
+        },
+        None => Err(Error::NoDriverResponse),
+    }
+}
+
+pub async fn select_answer(tx: &WebdriverSender, answer: String) -> Result<Option<String>, Error> {
+    let (res_tx, mut rx) = channel(2);
+    tx.send((Signal::ChooseAnswer(answer), res_tx))
+        .await
+        .unwrap();
+    match rx.recv().await {
+        Some(signal) => match signal {
+            Response::ChooseAnswerResponse(res) => {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok(res)
             }
             Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
             _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),

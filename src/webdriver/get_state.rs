@@ -77,7 +77,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
 
                 "challenge-translate" => {
                     let text = driver
-                        .find_element(By::Css(r#"div[data-test="challenge-header"]"#))
+                        .find_element(By::Css(r#"[data-test="challenge challenge-translate"] > div > div > div > div> div> div > div"#))
                         .await?
                         .text()
                         .await?;

@@ -4,6 +4,14 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::*;
 use std::io;
 
+/// Uses tokio to delay program for number of ms
+#[macro_export]
+macro_rules! delay {
+    ($time:literal) => {
+        tokio::time::sleep(Duration::from_millis($time)).await;
+    };
+}
+
 #[derive(Debug, Copy, Clone, AsExpression, FromSqlRow, PartialEq)]
 #[sql_type = "Text"]
 pub enum QuestionType {

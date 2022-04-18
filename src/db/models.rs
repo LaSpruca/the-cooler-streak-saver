@@ -1,7 +1,7 @@
 use super::schema::questions;
 use crate::common::QuestionType;
 
-#[derive(Queryable, Debug)]
+#[derive(Queryable, Debug, Clone)]
 pub struct Question {
     pub id: i32,
     pub language: String,

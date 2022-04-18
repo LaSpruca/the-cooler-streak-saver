@@ -6,7 +6,9 @@ extern crate core;
 
 use crate::db::models::{NewQuestion, Question};
 use crate::db::{create_connection, run_migrations, DbConnection};
-use crate::webdriver::{get_state, next, skip_question, start_language, State, WebdriverSender};
+use crate::webdriver::{
+    get_state, next, select_answer, skip_question, start_language, State, WebdriverSender,
+};
 use diesel::prelude::*;
 use dotenv::dotenv;
 use std::process::exit;
@@ -104,7 +106,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
             State::Question(qtype, lang, qu) => {
                 info!("Question: Type = {qtype:?}, language = {lang}, question = {qu}");
 
-                let answers = {
+                let answers: Vec<Question> = {
                     use db::schema::questions::dsl::*;
 
                     questions
@@ -130,6 +132,18 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                             .execute(&db_conn)
                             .unwrap();
                         info!("Registered {:#?}", qu)
+                    }
+                } else {
+                    let ans = answers.get(0).unwrap();
+                    if let Some(updated) = select_answer(&tx, ans.answer.clone()).await.unwrap() {
+                        use db::schema::questions::dsl::{answer, questions};
+                        diesel::update(questions.find(ans.id))
+                            .set(answer.eq(updated.clone()))
+                            .execute(&db_conn);
+                        info!(
+                            "Updating answer to question {} (lang: {}, type: {:?}), to {updated}",
+                            ans.answer, ans.language, ans.question_type
+                        );
                     }
                 }
             }
