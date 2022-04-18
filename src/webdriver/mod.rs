@@ -3,11 +3,11 @@ mod questions;
 mod signin;
 
 pub use crate::webdriver::get_state::State;
-use crate::webdriver::questions::{choose_answer, click_next, skip, start_intro};
+use crate::webdriver::questions::{choose_answer, click_next, skip, start_intro, type_translation};
 use crate::webdriver::signin::browser_login;
+use crate::{delay, QuestionType};
 use get_state::get_state as driver_get_state;
 use std::env;
-use std::time::Duration;
 use thirtyfour::error::WebDriverError;
 use thirtyfour::prelude::*;
 use thiserror::Error as ThisError;
@@ -48,7 +48,7 @@ pub enum Signal {
     StartLanguage,
     Skip,
     ClickNext,
-    ChooseAnswer(String),
+    AnswerQuestion(String, QuestionType),
 }
 
 #[derive(Debug)]
@@ -60,7 +60,7 @@ pub enum Response {
     WebDriverError(WebDriverError),
     Success,
     SkipResponse(String),
-    ChooseAnswerResponse(Option<String>),
+    AnswerResponse(Option<String>),
 }
 
 impl Response {
@@ -137,12 +137,13 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
                 }
-                Signal::ChooseAnswer(ans) => {
-                    match choose_answer(&driver, ans).await {
-                        Ok(opt) => sender
-                            .send(Response::ChooseAnswerResponse(opt))
-                            .await
-                            .unwrap(),
+                Signal::AnswerQuestion(ans, question_type) => {
+                    let res = match question_type {
+                        QuestionType::Translate => type_translation(&driver, ans).await,
+                        QuestionType::Select => choose_answer(&driver, ans).await,
+                    };
+                    match res {
+                        Ok(opt) => sender.send(Response::AnswerResponse(opt)).await.unwrap(),
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
                 }
@@ -197,7 +198,7 @@ pub async fn start_language(tx: &WebdriverSender) -> Result<(), Error> {
     match rx.recv().await {
         Some(signal) => match signal {
             Response::Success => {
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                delay!(5000);
                 Ok(())
             }
             Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
@@ -226,7 +227,7 @@ pub async fn next(tx: &WebdriverSender) -> Result<(), Error> {
     match rx.recv().await {
         Some(signal) => match signal {
             Response::Success => {
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                delay!(500);
                 Ok(())
             }
             Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
@@ -236,15 +237,19 @@ pub async fn next(tx: &WebdriverSender) -> Result<(), Error> {
     }
 }
 
-pub async fn select_answer(tx: &WebdriverSender, answer: String) -> Result<Option<String>, Error> {
+pub async fn answer_question(
+    tx: &WebdriverSender,
+    answer: String,
+    question_type: QuestionType,
+) -> Result<Option<String>, Error> {
     let (res_tx, mut rx) = channel(2);
-    tx.send((Signal::ChooseAnswer(answer), res_tx))
+    tx.send((Signal::AnswerQuestion(answer, question_type), res_tx))
         .await
         .unwrap();
     match rx.recv().await {
         Some(signal) => match signal {
-            Response::ChooseAnswerResponse(res) => {
-                tokio::time::sleep(Duration::from_secs(5)).await;
+            Response::AnswerResponse(res) => {
+                delay!(500);
                 Ok(res)
             }
             Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),

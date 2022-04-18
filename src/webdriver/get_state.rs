@@ -84,6 +84,25 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                     Ok(Question(QuestionType::Translate, language, text))
                 }
 
+                "challenge-assist" => {
+                    let text = driver
+                        .find_element(By::Css(r#"[data-test="challenge challenge-assist"] > div > div > div > div> div> div > div"#))
+                        .await?
+                        .text()
+                        .await?;
+                    Ok(Question(QuestionType::Assist, language, text))
+                }
+
+                "challenge-tapComplete" => {
+                    let mut text = String::new();
+                    for element in driver.find_elements(By::Css(r#"[data-test="challenge challenge-tapComplete"] > div > div > div > span"#)).await? {
+                        let elm_text = element.text().await?;
+                        text += elm_text.as_str();
+                    }
+
+                    Ok(Question(QuestionType::TapComplete, language, text))
+                }
+
                 _ => Ok(UnknownQuestionType(question_type)),
             }
         } else {

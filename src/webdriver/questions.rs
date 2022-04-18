@@ -1,3 +1,8 @@
+// Imma just chuck this selecotr here for later
+// [data-test="blame blame-incorrect"] > div > div > div > div > span > span[class]
+// Selector for selecting the underlined elements in the "You fucked up text box"
+
+use crate::delay;
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, WebDriver};
 use tracing::debug;
@@ -58,13 +63,13 @@ pub async fn choose_answer(
             debug!("Got correct");
 
             possible.click().await?;
-            click_next(&driver).await?;
 
             // Check to see if the question was answered correctly
-            check_answer(&driver).await
+            return check_answer(&driver).await;
         }
     }
 
+    // Get the correct answer for gods sake
     Ok(Some(skip(driver).await?))
 }
 
@@ -73,10 +78,10 @@ pub async fn type_translation(
     correct_answer: String,
 ) -> WebDriverResult<Option<String>> {
     let keybd_button = driver
-        .find_element(By::Css(r#"data-test="player-toggle-keyboard""#))
+        .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
         .await?;
-
-    if keybd_button.text().await? == "Use Keyboard" {
+    debug!("{}", keybd_button.text().await?);
+    if keybd_button.text().await?.to_lowercase() == "use keyboard" {
         keybd_button.click().await?;
     }
 
@@ -90,18 +95,21 @@ pub async fn type_translation(
 }
 
 async fn check_answer(driver: &WebDriver) -> WebDriverResult<Option<String>> {
-    if let Ok(correct_display) = driver
+    click_next(&driver).await?;
+    delay!(500);
+
+    let result = if let Ok(correct_display) = driver
         .find_element(By::Css(
             r#"[data-test="blame blame-incorrect"] > div > div> div > div"#,
         ))
         .await
     {
-        click_next(driver).await?;
-
-        Ok(Some(correct_display.text().await?))
+        Some(correct_display.text().await?)
     } else {
-        click_next(driver).await?;
+        None
+    };
 
-        Ok(None)
-    }
+    click_next(&driver).await?;
+
+    Ok(result)
 }

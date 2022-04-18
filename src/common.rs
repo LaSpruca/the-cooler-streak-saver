@@ -8,7 +8,7 @@ use std::io;
 #[macro_export]
 macro_rules! delay {
     ($time:literal) => {
-        tokio::time::sleep(Duration::from_millis($time)).await;
+        tokio::time::sleep(std::time::Duration::from_millis($time)).await
     };
 }
 
@@ -17,6 +17,8 @@ macro_rules! delay {
 pub enum QuestionType {
     Translate,
     Select,
+    Assist,
+    TapComplete,
 }
 
 impl<DB: Backend> ToSql<Text, DB> for QuestionType
@@ -27,9 +29,11 @@ where
     where
         W: io::Write,
     {
-        let v = match *self {
+        let v = match self {
             QuestionType::Translate => "translate",
             QuestionType::Select => "select",
+            QuestionType::Assist => "assist",
+            QuestionType::TapComplete => "tapComplete",
         };
 
         v.to_sql(out)
@@ -45,6 +49,8 @@ where
         Ok(match v.as_str() {
             "translate" => QuestionType::Translate,
             "select" => QuestionType::Select,
+            "assist" => QuestionType::Assist,
+            "tapComplete" => QuestionType::TapComplete,
             _ => return Err("Unrecognized question type, tf are you on?".into()),
         })
     }
