@@ -3,7 +3,7 @@ mod questions;
 mod signin;
 
 pub use crate::webdriver::get_state::State;
-use crate::webdriver::questions::start_intro;
+use crate::webdriver::questions::{click_next, skip, start_intro};
 use crate::webdriver::signin::browser_login;
 use get_state::get_state as driver_get_state;
 use std::env;
@@ -47,6 +47,7 @@ pub enum Signal {
     GetSate,
     StartLanguage,
     Skip,
+    ClickNext,
 }
 
 #[derive(Debug)]
@@ -57,7 +58,7 @@ pub enum Response {
     StateResponse(State),
     WebDriverError(WebDriverError),
     Success,
-    SkipResponse(),
+    SkipResponse(String),
 }
 
 impl Response {
@@ -122,6 +123,18 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
                 }
+                Signal::Skip => {
+                    match skip(&driver).await {
+                        Ok(answer) => sender.send(Response::SkipResponse(answer)).await.unwrap(),
+                        Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
+                    };
+                }
+                Signal::ClickNext => {
+                    match click_next(&driver).await {
+                        Ok(_) => sender.send(Response::Success).await.unwrap(),
+                        Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
+                    };
+                }
             }
         }
     });
@@ -170,6 +183,35 @@ pub async fn get_state(tx: &WebdriverSender) -> Result<State, Error> {
 pub async fn start_language(tx: &WebdriverSender) -> Result<(), Error> {
     let (res_tx, mut rx) = channel(2);
     tx.send((Signal::StartLanguage, res_tx)).await.unwrap();
+    match rx.recv().await {
+        Some(signal) => match signal {
+            Response::Success => {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok(())
+            }
+            Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
+            _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),
+        },
+        None => Err(Error::NoDriverResponse),
+    }
+}
+
+pub async fn skip_question(tx: &WebdriverSender) -> Result<String, Error> {
+    let (res_tx, mut rx) = channel(2);
+    tx.send((Signal::Skip, res_tx)).await.unwrap();
+    match rx.recv().await {
+        Some(signal) => match signal {
+            Response::SkipResponse(answer) => Ok(answer),
+            Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
+            _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),
+        },
+        None => Err(Error::NoDriverResponse),
+    }
+}
+
+pub async fn next(tx: &WebdriverSender) -> Result<(), Error> {
+    let (res_tx, mut rx) = channel(2);
+    tx.send((Signal::ClickNext, res_tx)).await.unwrap();
     match rx.recv().await {
         Some(signal) => match signal {
             Response::Success => {

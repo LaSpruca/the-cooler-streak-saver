@@ -1,20 +1,20 @@
 use super::schema::questions;
 use crate::common::QuestionType;
 
-#[derive(Queryable)]
+#[derive(Queryable, Debug)]
 pub struct Question {
     pub id: i32,
+    pub language: String,
     pub question: String,
     pub answer: String,
-    pub language: String,
     pub question_type: QuestionType,
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, Clone, Debug)]
 #[table_name = "questions"]
-pub struct NewPost<'a> {
-    pub question: &'a str,
-    pub answer: &'a str,
-    pub language: &'a str,
+pub struct NewQuestion {
+    pub language: String,
+    pub question: String,
+    pub answer: String,
     pub question_type: QuestionType,
 }

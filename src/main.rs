@@ -4,8 +4,10 @@ extern crate diesel;
 extern crate diesel_migrations;
 extern crate core;
 
-use crate::db::{create_connection, run_migrations};
-use crate::webdriver::{get_state, start_language, Error, State, WebdriverSender};
+use crate::db::models::{NewQuestion, Question};
+use crate::db::{create_connection, run_migrations, DbConnection};
+use crate::webdriver::{get_state, next, skip_question, start_language, State, WebdriverSender};
+use diesel::prelude::*;
 use dotenv::dotenv;
 use std::process::exit;
 use tokio::signal::ctrl_c;
@@ -64,7 +66,7 @@ async fn main() {
     });
 
     // Run the main application with panic capture so that the chrome window can be closed
-    match tokio::spawn(run(tx.clone())).await {
+    match tokio::spawn(run(tx.clone(), db)).await {
         Err(e) => {
             if e.is_panic() {
                 error!("Application panicked");
@@ -77,7 +79,7 @@ async fn main() {
     webdriver::quit(tx).await;
 }
 
-async fn run(tx: WebdriverSender) {
+async fn run(tx: WebdriverSender, db_conn: DbConnection) {
     match webdriver::sign_in(&tx).await {
         Ok(_) => {}
         Err(err) => {
@@ -99,8 +101,41 @@ async fn run(tx: WebdriverSender) {
                 start_language(&tx).await.unwrap();
             }
             State::StartLesson => {}
-            State::Question(_, _) => {}
-            State::JustClickNext => {}
+            State::Question(qtype, lang, qu) => {
+                info!("Question: Type = {qtype:?}, language = {lang}, question = {qu}");
+
+                let answers = {
+                    use db::schema::questions::dsl::*;
+
+                    questions
+                        .filter(question_type.eq(qtype.clone()))
+                        .filter(language.eq(lang.clone()))
+                        .filter(question.eq(qu.clone()))
+                        .load::<Question>(&db_conn)
+                        .unwrap()
+                };
+
+                if answers.is_empty() {
+                    let ans = skip_question(&tx).await.unwrap();
+                    {
+                        use db::schema::questions;
+                        let qu = NewQuestion {
+                            answer: ans,
+                            question: qu,
+                            language: lang,
+                            question_type: qtype,
+                        };
+                        diesel::insert_into(questions::table)
+                            .values(qu.clone())
+                            .execute(&db_conn)
+                            .unwrap();
+                        info!("Registered {:#?}", qu)
+                    }
+                }
+            }
+            State::JustClickNext => {
+                next(&tx).await.unwrap();
+            }
             State::Fuckd => {
                 error!("Unable to determine application state");
                 loop {}

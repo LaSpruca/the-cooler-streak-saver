@@ -35,14 +35,14 @@ pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
 
     // Input the password
     driver
-        .find_element(By::Css("input[data-test=\"password-input\"]"))
+        .find_element(By::Css(r#"input[data-test="password-input"]"#))
         .await?
         .send_keys(&password)
         .await?;
 
     // Click the login button
     driver
-        .find_element(By::Css("button[data-test=\"register-button\"]"))
+        .find_element(By::Css(r#"button[data-test="register-button"]"#))
         .await?
         .click()
         .await?;
@@ -55,7 +55,7 @@ pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
     // Check to see if login is successfull
     if !driver.current_url().await?.ends_with("learn") {
         match driver
-            .find_element(By::Css("div[data-test=\"invalid-form-field\"]"))
+            .find_element(By::Css(r#"div[data-test="invalid-form-field"]"#))
             .await
         {
             Ok(div) => {

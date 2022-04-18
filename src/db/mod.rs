@@ -2,19 +2,19 @@ use diesel::Connection;
 use std::env;
 use tracing::{error, info};
 
-mod models;
-mod schema;
+pub mod models;
+pub mod schema;
 
 embed_migrations!("migrations");
 
 #[cfg(feature = "sqlite")]
-use diesel::SqliteConnection as DbConnection;
+pub use diesel::SqliteConnection as DbConnection;
 
 #[cfg(feature = "mysql")]
-use diesel::MysqlConnection as DbConnection;
+pub use diesel::MysqlConnection as DbConnection;
 
 #[cfg(feature = "postgres")]
-use diesel::PgConnection as DbConnection;
+pub use diesel::PgConnection as DbConnection;
 
 pub fn create_connection() -> Option<DbConnection> {
     #[cfg(feature = "sqlite")]

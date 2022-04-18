@@ -8,7 +8,10 @@ use tracing::debug;
 pub enum State {
     StartLanguage,
     StartLesson,
-    Question(QuestionType, String),
+    /// - `0`: The kind of question
+    /// - `1`: The language
+    /// - `2`: The question itself
+    Question(QuestionType, String, String),
     JustClickNext,
     Fuckd,
     UnknownQuestionType(String),
@@ -51,6 +54,16 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
 
             debug!("Found got question type");
 
+            let language = driver
+                .current_url()
+                .await?
+                .strip_prefix("https://www.duolingo.com/skill/")
+                .unwrap()
+                .split_once("/")
+                .unwrap()
+                .0
+                .to_string();
+
             match question_type.as_str() {
                 "challenge-select" => {
                     // Get the text
@@ -59,7 +72,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         .await?
                         .text()
                         .await?;
-                    Ok(Question(QuestionType::Select, text))
+                    Ok(Question(QuestionType::Select, language, text))
                 }
 
                 "challenge-translate" => {
@@ -68,7 +81,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         .await?
                         .text()
                         .await?;
-                    Ok(Question(QuestionType::Translate, text))
+                    Ok(Question(QuestionType::Translate, language, text))
                 }
 
                 _ => Ok(UnknownQuestionType(question_type)),
