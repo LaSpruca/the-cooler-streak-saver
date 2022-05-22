@@ -51,6 +51,8 @@ pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
     // Give duolingo max 20 seconds to login
     let time_elapsed = Instant::now();
     let timout = Duration::from_secs(20);
+    debug!("Logging In...");
+
     // While either not on the learn page, or can't find the skill tree
     while driver.current_url().await? != "https://www.duolingo.com/learn"
         || driver
@@ -63,6 +65,7 @@ pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
+    debug!("Logged In");
 
     // Check to see if login is successful
     if !driver.current_url().await?.ends_with("learn") {

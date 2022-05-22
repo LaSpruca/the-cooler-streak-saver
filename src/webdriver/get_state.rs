@@ -1,4 +1,5 @@
 use crate::common::QuestionType;
+use crate::delay;
 use crate::webdriver::get_state::State::{Fuckd, JustClickNext, Question, UnknownQuestionType};
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, WebDriver};
@@ -30,6 +31,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
         if let Ok(_) = elm.find_element(By::Css("h2")).await {
             Ok(State::StartLanguage)
         } else {
+            debug!("Starting Lesson!");
             Ok(State::StartLesson)
         }
     }
@@ -108,6 +110,23 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         language,
                         text.trim_end().to_string(),
                     ))
+                }
+
+                "challenge-completeReverseTranslation" => {
+                    // We can turn this into a translate using the make harder button
+                    driver.find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#)).await?.click().await?;
+
+                    while driver.find_element(By::Css(r#"[data-test="challenge-translate-input"]"#)).await.is_err() {
+                        delay!(100)
+                    }
+
+                    let text = driver
+                        .find_element(By::Css(r#"[data-test="challenge challenge-completeReverseTranslation"] > div > div > div > div> div> div > div"#))
+                        .await?
+                        .text()
+                        .await?;
+                    Ok(Question(QuestionType::Translate, language, text))
+
                 }
 
                 "challenge-match" => {

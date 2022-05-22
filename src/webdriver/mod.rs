@@ -5,7 +5,7 @@ mod signin;
 pub use crate::webdriver::get_state::State;
 use crate::webdriver::questions::{
     choose_answer, choose_answer_underline_test, click_next, ignore_question, skip, skip_underline,
-    start_intro, type_translation,
+    start_intro, type_translation, choose_answer_assist, next_skill_tree_item,
 };
 use crate::webdriver::signin::browser_login;
 use crate::{delay, QuestionType};
@@ -49,6 +49,7 @@ pub enum Signal {
     SignIn,
     GetSate,
     StartLanguage,
+    StartLesson,
     Skip,
     SkipUnderlined,
     ClickNext,
@@ -130,6 +131,12 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
                 }
+                Signal::StartLesson => {
+                    match next_skill_tree_item(&driver).await {
+                        Ok(_) => sender.send(Response::Success).await.unwrap(),
+                        Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
+                    };
+                }
                 Signal::Skip => {
                     match skip(&driver).await {
                         Ok(answer) => sender.send(Response::SkipResponse(answer)).await.unwrap(),
@@ -152,8 +159,11 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                 Signal::AnswerQuestion(ans, question_type) => {
                     let res = match question_type {
                         QuestionType::Translate => type_translation(&driver, ans).await,
-                        QuestionType::Select | QuestionType::Assist => {
+                        QuestionType::Select => {
                             choose_answer(&driver, ans).await
+                        }
+                        QuestionType::Assist => {
+                            choose_answer_assist(&driver, ans).await
                         }
                         QuestionType::TapComplete => {
                             choose_answer_underline_test(&driver, ans).await
@@ -231,6 +241,23 @@ pub async fn start_language(tx: &WebdriverSender) -> Result<(), Error> {
         None => Err(Error::NoDriverResponse),
     }
 }
+
+pub async fn start_lesson(tx: &WebdriverSender) -> Result<(), Error> {
+    let (res_tx, mut rx) = channel(2);
+    tx.send((Signal::StartLesson, res_tx)).await.unwrap();
+    match rx.recv().await {
+        Some(signal) => match signal {
+            Response::Success => {
+                delay!(5000);
+                Ok(())
+            }
+            Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
+            _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),
+        },
+        None => Err(Error::NoDriverResponse),
+    }
+}
+
 
 pub async fn skip_question(
     tx: &WebdriverSender,

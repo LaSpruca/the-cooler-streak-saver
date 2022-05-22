@@ -17,6 +17,36 @@ pub async fn start_intro(driver: &WebDriver) -> WebDriverResult<()> {
     Ok(())
 }
 
+pub async fn next_skill_tree_item(driver: &WebDriver) -> WebDriverResult<()> {
+    let mut i: usize =0;
+    loop {
+        let lesson_buttons = driver.find_elements(By::Css(r#"div[data-test="skill"]>div[tabindex]"#)).await?;
+        lesson_buttons[i].click().await?;
+        debug!("Clicking on skill");
+
+        delay!(500);
+
+        let mut start_buttons = driver.find_elements(By::Css(r#"a[data-test="start-button"]"#)).await?;
+        if start_buttons.len() == 0 {
+            lesson_buttons[i].click().await?;
+            delay!(500);
+            start_buttons = driver.find_elements(By::Css(r#"a[data-test="start-button"]"#)).await?;
+
+        }
+        debug!("{}",start_buttons[0]);
+        if start_buttons[0].text().await?.contains("PRACTICE") {
+            lesson_buttons[i].click().await?;
+            i += 1
+        } else {
+            start_buttons[0].click().await?;
+            break;
+        }
+    }
+    debug!("Done");
+
+    Ok(())
+}
+
 /// Skips a question, consumes all text in the blame-incorrect section as answer
 pub async fn skip(driver: &WebDriver) -> WebDriverResult<String> {
     driver
@@ -76,6 +106,34 @@ pub async fn choose_answer(
     let possibles = driver
         .find_elements(By::Css(
             r#"[data-test="challenge-choice"] > div > span[dir]"#,
+        ))
+        .await?;
+    debug!("Found element");
+
+    for possible in possibles {
+        if possible.text().await? == correct_answer {
+            debug!("Got correct");
+
+            possible.click().await?;
+
+            // Check to see if the question was answered correctly
+            return check_answer_full(&driver).await;
+        }
+    }
+
+    debug!("Could not find correct answer");
+
+    // Get the correct answer for gods sake
+    Ok(Some(skip(driver).await?))
+}
+
+pub async fn choose_answer_assist(
+    driver: &WebDriver,
+    correct_answer: String,
+) -> WebDriverResult<Option<String>> {
+    let possibles = driver
+        .find_elements(By::Css(
+            r#"[data-test="challenge-choice"] > div"#,
         ))
         .await?;
     debug!("Found element");

@@ -13,6 +13,7 @@ use crate::webdriver::{
 };
 use diesel::prelude::*;
 use dotenv::dotenv;
+use webdriver::start_lesson;
 use std::process::exit;
 use tokio::signal::ctrl_c;
 use tracing::{error, info};
@@ -105,7 +106,9 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
             State::StartLanguage => {
                 start_language(&tx).await.unwrap();
             }
-            State::StartLesson => {}
+            State::StartLesson => {
+                start_lesson(&tx).await.unwrap();
+            }
             State::Question(qtype, lang, qu) => {
                 info!("Question: Type = {qtype:?}, language = {lang}, question = {qu}");
 
