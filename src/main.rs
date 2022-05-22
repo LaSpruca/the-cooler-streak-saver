@@ -217,6 +217,19 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                             "Updating answer to question `{qu}` (lang: {lang}, type: {:?}), to {updated}",
                             QuestionType::MatchPairs
                         );
+                    } else {
+                        use db::schema::questions;
+                        let qu = NewQuestion {
+                            answer: updated.clone(),
+                            question: qu.clone(),
+                            language: lang.clone(),
+                            question_type: QuestionType::MatchPairs,
+                        };
+                        diesel::insert_into(questions::table)
+                            .values(qu.clone())
+                            .execute(&db_conn)
+                            .unwrap();
+                        info!("Registered {:#?}", qu)
                     }
                 }
             }

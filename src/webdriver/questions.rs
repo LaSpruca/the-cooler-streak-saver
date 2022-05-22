@@ -90,17 +90,19 @@ pub async fn skip_underline(driver: &WebDriver) -> WebDriverResult<String> {
         .click()
         .await?;
 
-    let correct = driver
-        .find_element(By::Css(
+    let mut correct = vec![];
+    for elm in driver
+        .find_elements(By::Css(
             r#"[data-test="blame blame-incorrect"] > div > div > div > div > span > span[class]"#,
         ))
         .await?
-        .text()
-        .await?;
+    {
+        correct.push(elm.text().await?);
+    }
 
     click_next(driver).await?;
 
-    Ok(correct)
+    Ok(correct.join(","))
 }
 
 pub async fn click_next(driver: &WebDriver) -> WebDriverResult<()> {
@@ -171,27 +173,43 @@ pub async fn choose_answer_underline_test(
     driver: &WebDriver,
     correct_answer: String,
 ) -> WebDriverResult<Option<String>> {
-    let possibles = driver
-        .find_elements(By::Css(r#"div > [data-test="challenge-tap-token"] > span"#))
-        .await?;
-    debug!("Found element");
+    let mut found_all = true;
+    debug!("{correct_answer}");
+    debug!("{:?}", correct_answer.split(",").collect::<Vec<_>>());
+    for part in correct_answer.split(",") {
+        debug!("{part}");
+        let possibles = driver
+            .find_elements(By::Css(r#"div > [data-test="challenge-tap-token"] > span"#))
+            .await?;
 
-    for possible in possibles {
-        debug!("{}", possible.text().await?);
-        if possible.text().await? == correct_answer {
-            debug!("Got correct");
+        let mut found = false;
 
-            possible.click().await?;
+        'inner: for possible in possibles {
+            debug!("{}", possible.text().await?);
+            if possible.text().await? == part {
+                debug!("Found match");
 
-            // Check to see if the question was answered correctly
-            return check_answer_underline(&driver).await;
+                possible.click().await?;
+
+                found = true;
+                break 'inner;
+            }
+        }
+
+        if !found {
+            found_all = false;
+            break;
         }
     }
 
-    debug!("Could not find correct answer");
+    if !found_all {
+        debug!("Could not find correct answer");
 
-    // Get the correct answer for gods sake
-    Ok(Some(skip_underline(driver).await?))
+        // Get the correct answer for gods sake
+        Ok(Some(skip_underline(driver).await?))
+    } else {
+        check_answer_underline(driver).await
+    }
 }
 
 pub async fn type_translation(
@@ -245,15 +263,22 @@ async fn check_answer_underline(driver: &WebDriver) -> WebDriverResult<Option<St
     click_next(&driver).await?;
     delay!(500);
 
-    let result = if let Ok(correct_display) = driver
-        .find_element(By::Css(
+    let underlined = driver
+        .find_elements(By::Css(
             r#"[data-test="blame blame-incorrect"] > div > div > div > div > span > span[class]"#,
         ))
-        .await
-    {
-        Some(correct_display.text().await?)
-    } else {
+        .await?;
+
+    let result = if underlined.is_empty() {
         None
+    } else {
+        let mut correct = vec![];
+
+        for element in underlined.iter() {
+            correct.push(element.text().await?);
+        }
+
+        Some(correct.join(","))
     };
 
     click_next(&driver).await?;
@@ -300,8 +325,8 @@ async fn brute_force(driver: &WebDriver, question: &String) -> WebDriverResult<S
             let other_text = element.find_element(By::Tag("span")).await?.text().await?;
             let answer = text.strip_prefix(other_text.as_str()).unwrap().strip_prefix("\n").unwrap();
             if select_pair(driver, question, answer).await? {
+                delay!(300);
                 return Ok(answer.to_string());
-                delay!(500);
             }
             // Select Pair takes 800ms for animation
             delay!(1000);
