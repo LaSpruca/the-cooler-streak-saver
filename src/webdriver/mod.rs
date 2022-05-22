@@ -3,13 +3,11 @@ mod questions;
 mod signin;
 
 pub use crate::webdriver::get_state::State;
-use crate::webdriver::questions::{
-    choose_answer, choose_answer_underline_test, click_next, ignore_question, skip, skip_underline,
-    start_intro, type_translation, choose_answer_assist, next_skill_tree_item,
-};
+use crate::webdriver::questions::*;
 use crate::webdriver::signin::browser_login;
 use crate::{delay, QuestionType};
 use get_state::get_state as driver_get_state;
+use std::collections::HashMap;
 use std::env;
 use thirtyfour::error::WebDriverError;
 use thirtyfour::prelude::*;
@@ -55,6 +53,7 @@ pub enum Signal {
     ClickNext,
     AnswerQuestion(String, QuestionType),
     IgnoreQuestion,
+    MultiAnswerQuestion(HashMap<String, Option<String>>),
 }
 
 #[derive(Debug)]
@@ -67,6 +66,7 @@ pub enum Response {
     Success,
     SkipResponse(String),
     AnswerResponse(Option<String>),
+    MultiAnswerResponse(HashMap<String, String>),
 }
 
 impl Response {
@@ -159,14 +159,13 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                 Signal::AnswerQuestion(ans, question_type) => {
                     let res = match question_type {
                         QuestionType::Translate => type_translation(&driver, ans).await,
-                        QuestionType::Select => {
-                            choose_answer(&driver, ans).await
-                        }
-                        QuestionType::Assist => {
-                            choose_answer_assist(&driver, ans).await
-                        }
+                        QuestionType::Select => choose_answer(&driver, ans).await,
+                        QuestionType::Assist => choose_answer_assist(&driver, ans).await,
                         QuestionType::TapComplete => {
                             choose_answer_underline_test(&driver, ans).await
+                        }
+                        QuestionType::MatchPairs => {
+                            unreachable!()
                         }
                     };
 
@@ -180,6 +179,15 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         Ok(_) => sender.send(Response::Success).await.unwrap(),
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
+                }
+                Signal::MultiAnswerQuestion(answers) => {
+                    match answer_match(&driver, &answers).await {
+                        Ok(val) => sender
+                            .send(Response::MultiAnswerResponse(val))
+                            .await
+                            .unwrap(),
+                        Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
+                    }
                 }
             }
         }
@@ -258,7 +266,6 @@ pub async fn start_lesson(tx: &WebdriverSender) -> Result<(), Error> {
     }
 }
 
-
 pub async fn skip_question(
     tx: &WebdriverSender,
     question_type: QuestionType,
@@ -326,6 +333,27 @@ pub async fn answer_question(
     match rx.recv().await {
         Some(signal) => match signal {
             Response::AnswerResponse(res) => {
+                delay!(500);
+                Ok(res)
+            }
+            Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
+            _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),
+        },
+        None => Err(Error::NoDriverResponse),
+    }
+}
+
+pub async fn answer_multi_question(
+    tx: &WebdriverSender,
+    answers: HashMap<String, Option<String>>,
+) -> Result<HashMap<String, String>, Error> {
+    let (res_tx, mut rx) = channel(2);
+    tx.send((Signal::MultiAnswerQuestion(answers), res_tx))
+        .await
+        .unwrap();
+    match rx.recv().await {
+        Some(signal) => match signal {
+            Response::MultiAnswerResponse(res) => {
                 delay!(500);
                 Ok(res)
             }

@@ -8,17 +8,18 @@ use crate::common::QuestionType;
 use crate::db::models::{NewQuestion, Question};
 use crate::db::{create_connection, run_migrations, DbConnection};
 use crate::webdriver::{
-    answer_question, discard_question, get_state, next, skip_question, start_language, State,
-    WebdriverSender,
+    answer_multi_question, answer_question, discard_question, get_state, next, skip_question,
+    start_language, State, WebdriverSender,
 };
 use diesel::prelude::*;
 use dotenv::dotenv;
-use webdriver::start_lesson;
+use std::collections::HashMap;
 use std::process::exit;
 use tokio::signal::ctrl_c;
 use tracing::{error, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use webdriver::start_lesson;
 
 mod common;
 mod db;
@@ -172,7 +173,53 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
             State::IgnoreQuestion => {
                 discard_question(&tx).await.unwrap();
             }
-            State::MatchQuestion(_, _) => {}
+            State::MatchQuestion(questions, lang) => {
+                let answers = questions
+                    .into_iter()
+                    .map(|qu| {
+                        (qu.clone(), {
+                            {
+                                use db::schema::questions::dsl::*;
+
+                                questions
+                                    .filter(question_type.eq(QuestionType::MatchPairs))
+                                    .filter(language.eq(lang.clone()))
+                                    .filter(question.eq(qu))
+                                    .load::<Question>(&db_conn)
+                                    .unwrap()
+                                    .iter()
+                                    .next()
+                                    .map(|f| f.to_owned())
+                            }
+                        })
+                    })
+                    .collect::<HashMap<String, Option<Question>>>();
+
+                let correct = answer_multi_question(
+                    &tx,
+                    answers
+                        .clone()
+                        .into_iter()
+                        .map(|(k, v)| (k, v.map(|v| v.answer.to_string())))
+                        .collect(),
+                )
+                .await
+                .unwrap();
+
+                for (qu, updated) in correct.iter() {
+                    if let Some(ans) = answers.get(qu).unwrap() {
+                        use db::schema::questions::dsl::{answer, questions};
+                        diesel::update(questions.find(ans.id))
+                            .set(answer.eq(answer.clone()))
+                            .execute(&db_conn)
+                            .unwrap();
+                        info!(
+                            "Updating answer to question `{qu}` (lang: {lang}, type: {:?}), to {updated}",
+                            QuestionType::MatchPairs
+                        );
+                    }
+                }
+            }
         }
     }
 }

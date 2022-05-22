@@ -3,8 +3,10 @@
 // Selector for selecting the underlined elements in the "You fucked up text box"
 
 use crate::delay;
-use thirtyfour::error::WebDriverResult;
-use thirtyfour::{By, WebDriver};
+use std::collections::HashMap;
+use thirtyfour::common::capabilities::firefox::LogLevel::Error;
+use thirtyfour::error::{WebDriverError, WebDriverErrorInfo, WebDriverResult};
+use thirtyfour::{By, ElementId, WebDriver, WebElement};
 use tracing::debug;
 
 pub async fn start_intro(driver: &WebDriver) -> WebDriverResult<()> {
@@ -18,7 +20,9 @@ pub async fn start_intro(driver: &WebDriver) -> WebDriverResult<()> {
 }
 
 pub async fn next_skill_tree_item(driver: &WebDriver) -> WebDriverResult<()> {
-    let all_lesson_buttons = driver.find_elements(By::Css(r#"div[data-test="skill"]>div[tabindex]"#)).await?;
+    let all_lesson_buttons = driver
+        .find_elements(By::Css(r#"div[data-test="skill"]>div[tabindex]"#))
+        .await?;
 
     let mut started_lesson = false;
 
@@ -28,14 +32,18 @@ pub async fn next_skill_tree_item(driver: &WebDriver) -> WebDriverResult<()> {
         delay!(500);
 
         let get_start_buttons = r#"a[data-test="start-button"]"#;
-        while driver.find_element(By::Css(get_start_buttons)).await.is_err() {
+        while driver
+            .find_element(By::Css(get_start_buttons))
+            .await
+            .is_err()
+        {
             lesson_button.click().await?;
             delay!(500);
         }
 
         let start_button = driver.find_element(By::Css(get_start_buttons)).await?;
-        
-        debug!("{}",start_button);
+
+        debug!("{}", start_button);
         if !start_button.text().await?.contains("PRACTICE") {
             // Let's start the lesson
             start_button.click().await?;
@@ -43,9 +51,12 @@ pub async fn next_skill_tree_item(driver: &WebDriver) -> WebDriverResult<()> {
             break;
         }
         // Done lesson, so we can close it and continue onwards
-        lesson_button.click().await?;        
+        lesson_button.click().await?;
     }
-    assert!(started_lesson, "Failed to start lesson - nothing left to complete");
+    assert!(
+        started_lesson,
+        "Failed to start lesson - nothing left to complete"
+    );
 
     Ok(())
 }
@@ -135,9 +146,7 @@ pub async fn choose_answer_assist(
     correct_answer: String,
 ) -> WebDriverResult<Option<String>> {
     let possibles = driver
-        .find_elements(By::Css(
-            r#"[data-test="challenge-choice"] > div"#,
-        ))
+        .find_elements(By::Css(r#"[data-test="challenge-choice"] > div"#))
         .await?;
     debug!("Found element");
 
@@ -264,4 +273,72 @@ pub async fn ignore_question(driver: &WebDriver) -> WebDriverResult<()> {
     Ok(())
 }
 
-// pub async fn answer_match(driver: &web)
+pub async fn answer_match(
+    driver: &WebDriver,
+    questions: &HashMap<String, Option<String>>,
+) -> WebDriverResult<HashMap<String, String>> {
+    let mut response = HashMap::new();
+
+    for (question, answer) in questions.iter() {
+        if let Some(answer) = answer {
+            if !select_pair(driver, question, answer).await? {
+                response.insert(question.clone(), brute_force(driver, question).await?);
+            }
+        } else {
+            response.insert(question.clone(), brute_force(driver, question).await?);
+        }
+    }
+
+    Ok(response)
+}
+
+async fn brute_force(driver: &WebDriver, question: &String) -> WebDriverResult<String> {
+    for element in driver.find_elements(By::Css(r#"[data-test="challenge challenge-match"] > div > div > div > div > div:nth-child(2) > div > button"#)).await? {
+        if element.get_attribute("aria-disabled").await?.and_then(|val| if val == String::from("disabled") { Some(()) } else { None } ).is_none() {
+            let text = element.text().await?;
+            let other_text = element.find_element(By::Tag("span")).await?.text().await?;
+            let answer = text.strip_prefix(other_text.as_str()).unwrap().strip_prefix("\n").unwrap();
+            if select_pair(driver, question, answer).await? {
+                return Ok(answer.to_string());
+            }
+        }
+    }
+
+    Err(WebDriverError::NoSuchElement(WebDriverErrorInfo::new(
+        &format!("Could not find answer for {question}"),
+    )))
+}
+
+async fn select_pair(driver: &WebDriver, question: &str, answer: &str) -> WebDriverResult<bool> {
+    select_multi(driver, question, true).await?;
+    let elm = select_multi(driver, answer, false).await?;
+
+    Ok(
+        if let Some(disabled) = elm.get_attribute("aria-disabled").await? {
+            true
+        } else {
+            false
+        },
+    )
+}
+
+async fn select_multi<'a>(
+    webdriver: &'a WebDriver,
+    text: &str,
+    left: bool,
+) -> WebDriverResult<WebElement<'a>> {
+    let selector = format!(
+        r#"[data-test="challenge challenge-match"] > div > div > div > div > div:nth-child({}) > div > button"#,
+        if left { 1 } else { 2 }
+    );
+    for elm in webdriver.find_elements(By::Css(selector.as_str())).await? {
+        if elm.text().await?.ends_with(text) {
+            elm.click().await?;
+            return Ok(elm);
+        }
+    }
+
+    return Err(WebDriverError::NoSuchElement(WebDriverErrorInfo::new(
+        "¯\\_(ツ)_/¯",
+    )));
+}
