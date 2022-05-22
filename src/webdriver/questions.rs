@@ -303,8 +303,14 @@ pub async fn answer_match(
     questions: &HashMap<String, Option<String>>,
 ) -> WebDriverResult<HashMap<String, String>> {
     let mut response = HashMap::new();
+    let mut questions_priority_order: Vec<(&String, &Option<String>)> = questions.iter().collect();
+    questions_priority_order.sort_by(|a,b| {
+        let a_answered = if a.1.is_none() {0} else {1};
+        let b_answered = if b.1.is_none() {0} else {1};
+        a_answered.cmp(&b_answered)
+    });
 
-    for (question, answer) in questions.iter() {
+    for (question, answer) in questions_priority_order {
         if let Some(answer) = answer {
             if !select_pair(driver, question, answer).await? {
                 response.insert(question.clone(), brute_force(driver, question).await?);
