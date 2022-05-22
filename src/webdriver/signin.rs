@@ -3,6 +3,7 @@ use std::env;
 use std::time::Duration;
 use thirtyfour::error::WebDriverError;
 use thirtyfour::{By, WebDriver};
+use tokio::time::Instant;
 use tracing::debug;
 
 pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
@@ -47,12 +48,23 @@ pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
         .click()
         .await?;
 
-    // Give duolingo 5 seconds to login
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // Give duolingo max 20 seconds to login
+    let time_elapsed = Instant::now();
+    let timout = Duration::from_secs(20);
+    // While either not on the learn page, or can't find the skill tree
+    while driver.current_url().await? != "https://www.duolingo.com/learn"
+        || driver
+            .find_element(By::Css("div[data-test=\"skill-tree\"]"))
+            .await
+            .is_err()
+    {
+        if time_elapsed.elapsed() > timout {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
-    debug!("{}", driver.current_url().await?);
-
-    // Check to see if login is successfull
+    // Check to see if login is successful
     if !driver.current_url().await?.ends_with("learn") {
         match driver
             .find_element(By::Css(r#"div[data-test="invalid-form-field"]"#))

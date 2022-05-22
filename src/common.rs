@@ -19,6 +19,7 @@ pub enum QuestionType {
     Select,
     Assist,
     TapComplete,
+    // MatchPairs,
 }
 
 impl<DB: Backend> ToSql<Text, DB> for QuestionType
@@ -53,5 +54,15 @@ where
             "tapComplete" => QuestionType::TapComplete,
             _ => return Err("Unrecognized question type, tf are you on?".into()),
         })
+    }
+}
+
+impl QuestionType {
+    /// Check to see weather a question types blame-incorrect only needs the underlined component
+    pub fn check_underline(&self) -> bool {
+        match self {
+            Self::TapComplete => true,
+            _ => false,
+        }
     }
 }

@@ -1,6 +1,7 @@
 # The Cooler StreakSaver
-This project exits to say "Fuck you taine". It will run through a duolingo course, attempting to complete
-it. All questions and answers will be persisted to a database.
+This project exits to say "Fuck you python", after a friend did a similar thing in python. It
+will run through a duolingo course, attempting to complete it. All questions and answers will
+be persisted to a database.
 
 # Configuration
 ## Features

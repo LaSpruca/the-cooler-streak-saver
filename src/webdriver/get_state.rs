@@ -15,6 +15,7 @@ pub enum State {
     JustClickNext,
     Fuckd,
     UnknownQuestionType(String),
+    IgnoreQuestion,
 }
 
 pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
@@ -86,7 +87,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
 
                 "challenge-assist" => {
                     let text = driver
-                        .find_element(By::Css(r#"[data-test="challenge challenge-assist"] > div > div > div > div> div> div > div"#))
+                        .find_element(By::Css(r#"h1[data-test="challenge-header"]"#))
                         .await?
                         .text()
                         .await?;
@@ -100,8 +101,20 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         text += elm_text.as_str();
                     }
 
-                    Ok(Question(QuestionType::TapComplete, language, text))
+                    Ok(Question(
+                        QuestionType::TapComplete,
+                        language,
+                        text.trim_end().to_string(),
+                    ))
                 }
+
+                "challenge-match" => {
+                    let question_test = driver.find_element(By::Css("div")).await?;
+
+                    todo!("Actually implement this")
+                }
+
+                "challenge-listenTap" => return Ok(State::IgnoreQuestion),
 
                 _ => Ok(UnknownQuestionType(question_type)),
             }

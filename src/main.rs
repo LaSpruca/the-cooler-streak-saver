@@ -8,7 +8,8 @@ use crate::common::QuestionType;
 use crate::db::models::{NewQuestion, Question};
 use crate::db::{create_connection, run_migrations, DbConnection};
 use crate::webdriver::{
-    answer_question, get_state, next, skip_question, start_language, State, WebdriverSender,
+    answer_question, discard_question, get_state, next, skip_question, start_language, State,
+    WebdriverSender,
 };
 use diesel::prelude::*;
 use dotenv::dotenv;
@@ -60,13 +61,13 @@ async fn main() {
     };
 
     // Setup control_c handler to quit the chrome instance
-    let yeet = tx.clone();
-    tokio::spawn(async move {
-        ctrl_c().await.unwrap();
-        info!("Control c'd");
-        webdriver::quit(yeet).await;
-        exit(0);
-    });
+    // let yeet = tx.clone();
+    // tokio::spawn(async move {
+    //     ctrl_c().await.unwrap();
+    //     info!("Control c'd");
+    //     webdriver::quit(yeet).await;
+    //     exit(0);
+    // });
 
     // Run the main application with panic capture so that the chrome window can be closed
     match tokio::spawn(run(tx.clone(), db)).await {
@@ -79,7 +80,7 @@ async fn main() {
     };
 
     // Yeet chrome, because fuck you
-    webdriver::quit(tx).await;
+    // webdriver::quit(tx).await;
 }
 
 async fn run(tx: WebdriverSender, db_conn: DbConnection) {
@@ -92,7 +93,6 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
     };
 
     loop {
-        println!("Getting state");
         let state = match get_state(&tx).await {
             Ok(d) => d,
             Err(ex) => {
@@ -100,7 +100,6 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                 loop {}
             }
         };
-        println!("Got state state");
 
         match state {
             State::StartLanguage => {
@@ -122,7 +121,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                 };
 
                 if answers.is_empty() {
-                    let ans = skip_question(&tx).await.unwrap();
+                    let ans = skip_question(&tx, qtype).await.unwrap();
                     {
                         use db::schema::questions;
                         let qu = NewQuestion {
@@ -151,8 +150,8 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                             .execute(&db_conn)
                             .unwrap();
                         info!(
-                            "Updating answer to question {} (lang: {}, type: {:?}), to {updated}",
-                            ans.answer, ans.language, ans.question_type
+                            "Updating answer to question `{}` (lang: {}, type: {:?}), to {updated}",
+                            ans.question, ans.language, ans.question_type
                         );
                     }
                 }
@@ -162,12 +161,14 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
             }
             State::Fuckd => {
                 error!("Unable to determine application state");
-                panic!("Bad state");
+                continue;
             }
             State::UnknownQuestionType(kind) => {
                 info!("Unknown question type: {kind}");
             }
+            State::IgnoreQuestion => {
+                discard_question(&tx).await.unwrap();
+            }
         }
-        println!("Executed thing");
     }
 }
