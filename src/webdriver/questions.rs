@@ -18,31 +18,34 @@ pub async fn start_intro(driver: &WebDriver) -> WebDriverResult<()> {
 }
 
 pub async fn next_skill_tree_item(driver: &WebDriver) -> WebDriverResult<()> {
-    let mut i: usize =0;
-    loop {
-        let lesson_buttons = driver.find_elements(By::Css(r#"div[data-test="skill"]>div[tabindex]"#)).await?;
-        lesson_buttons[i].click().await?;
-        debug!("Clicking on skill");
+    let all_lesson_buttons = driver.find_elements(By::Css(r#"div[data-test="skill"]>div[tabindex]"#)).await?;
 
+    let mut started_lesson = false;
+
+    for lesson_button in all_lesson_buttons {
+        lesson_button.click().await?;
+        debug!("Clicking on skill");
         delay!(500);
 
-        let mut start_buttons = driver.find_elements(By::Css(r#"a[data-test="start-button"]"#)).await?;
-        if start_buttons.len() == 0 {
-            lesson_buttons[i].click().await?;
+        let get_start_buttons = r#"a[data-test="start-button"]"#;
+        while driver.find_element(By::Css(get_start_buttons)).await.is_err() {
+            lesson_button.click().await?;
             delay!(500);
-            start_buttons = driver.find_elements(By::Css(r#"a[data-test="start-button"]"#)).await?;
-
         }
-        debug!("{}",start_buttons[0]);
-        if start_buttons[0].text().await?.contains("PRACTICE") {
-            lesson_buttons[i].click().await?;
-            i += 1
-        } else {
-            start_buttons[0].click().await?;
+
+        let start_button = driver.find_element(By::Css(get_start_buttons)).await?;
+        
+        debug!("{}",start_button);
+        if !start_button.text().await?.contains("PRACTICE") {
+            // Let's start the lesson
+            start_button.click().await?;
+            started_lesson = true;
             break;
         }
+        // Done lesson, so we can close it and continue onwards
+        lesson_button.click().await?;        
     }
-    debug!("Done");
+    assert!(started_lesson, "Failed to start lesson - nothing left to complete");
 
     Ok(())
 }
