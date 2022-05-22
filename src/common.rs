@@ -20,6 +20,7 @@ pub enum QuestionType {
     Assist,
     TapComplete,
     MatchPairs,
+    Name,
 }
 
 impl<DB: Backend> ToSql<Text, DB> for QuestionType
@@ -36,6 +37,7 @@ where
             QuestionType::Assist => "assist",
             QuestionType::TapComplete => "tapComplete",
             QuestionType::MatchPairs => "matchPairs",
+            QuestionType::Name => "name",
         };
 
         v.to_sql(out)
@@ -54,6 +56,7 @@ where
             "assist" => QuestionType::Assist,
             "tapComplete" => QuestionType::TapComplete,
             "matchPairs" => QuestionType::MatchPairs,
+            "name" => QuestionType::Name,
             _ => return Err("Unrecognized question type, tf are you on?".into()),
         })
     }

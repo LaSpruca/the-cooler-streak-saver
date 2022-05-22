@@ -115,9 +115,17 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
 
                 "challenge-completeReverseTranslation" => {
                     // We can turn this into a translate using the make harder button
-                    driver.find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#)).await?.click().await?;
+                    driver
+                        .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
+                        .await?
+                        .click()
+                        .await?;
 
-                    while driver.find_element(By::Css(r#"[data-test="challenge-translate-input"]"#)).await.is_err() {
+                    while driver
+                        .find_element(By::Css(r#"[data-test="challenge-translate-input"]"#))
+                        .await
+                        .is_err()
+                    {
                         delay!(100)
                     }
 
@@ -127,7 +135,6 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         .text()
                         .await?;
                     Ok(Question(QuestionType::Translate, language, text))
-
                 }
 
                 "challenge-match" => {
@@ -163,6 +170,16 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                 }
 
                 "challenge-listenTap" | "challenge-speak" => return Ok(State::IgnoreQuestion),
+
+                "challenge-name" => {
+                    let text = driver
+                        .find_element(By::Css(r#"h1[data-test="challenge-header"]"#))
+                        .await?
+                        .text()
+                        .await?;
+
+                    Ok(Question(QuestionType::Name, language, text))
+                }
 
                 _ => Ok(UnknownQuestionType(question_type)),
             }

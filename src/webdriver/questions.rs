@@ -1,7 +1,3 @@
-// Imma just chuck this selecotr here for later
-//
-// Selector for selecting the underlined elements in the "You fucked up text box"
-
 use crate::delay;
 use std::collections::HashMap;
 use thirtyfour::common::capabilities::firefox::LogLevel::Error;
@@ -212,7 +208,7 @@ pub async fn choose_answer_underline_test(
     }
 }
 
-pub async fn type_translation(
+pub async fn type_translation_with_btn(
     driver: &WebDriver,
     correct_answer: String,
 ) -> WebDriverResult<Option<String>> {
@@ -226,6 +222,13 @@ pub async fn type_translation(
         keybd_button.click().await?;
     }
 
+    type_translation(driver, correct_answer).await
+}
+
+pub async fn type_translation(
+    driver: &WebDriver,
+    correct_answer: String,
+) -> WebDriverResult<Option<String>> {
     driver
         .find_element(By::Css(r#"[data-test="challenge-translate-input"]"#))
         .await?

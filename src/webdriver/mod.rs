@@ -161,12 +161,13 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                 }
                 Signal::AnswerQuestion(ans, question_type) => {
                     let res = match question_type {
-                        QuestionType::Translate => type_translation(&driver, ans).await,
+                        QuestionType::Translate => type_translation_with_btn(&driver, ans).await,
                         QuestionType::Select => choose_answer(&driver, ans).await,
                         QuestionType::Assist => choose_answer_assist(&driver, ans).await,
                         QuestionType::TapComplete => {
                             choose_answer_underline_test(&driver, ans).await
                         }
+                        QuestionType::Name => type_translation(&driver, ans).await,
                         QuestionType::MatchPairs => {
                             unreachable!()
                         }
