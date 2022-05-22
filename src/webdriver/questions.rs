@@ -288,19 +288,22 @@ pub async fn answer_match(
             response.insert(question.clone(), brute_force(driver, question).await?);
         }
     }
+    click_next(driver).await?;
 
     Ok(response)
 }
 
 async fn brute_force(driver: &WebDriver, question: &String) -> WebDriverResult<String> {
     for element in driver.find_elements(By::Css(r#"[data-test="challenge challenge-match"] > div > div > div > div > div:nth-child(2) > div > button"#)).await? {
-        if element.get_attribute("aria-disabled").await?.and_then(|val| if val == String::from("disabled") { Some(()) } else { None } ).is_none() {
+        if element.get_attribute("aria-disabled").await?.is_none() {
             let text = element.text().await?;
             let other_text = element.find_element(By::Tag("span")).await?.text().await?;
             let answer = text.strip_prefix(other_text.as_str()).unwrap().strip_prefix("\n").unwrap();
             if select_pair(driver, question, answer).await? {
                 return Ok(answer.to_string());
             }
+            // Select Pair takes 800ms for animation
+            delay!(820);
         }
     }
 
