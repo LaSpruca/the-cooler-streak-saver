@@ -2,7 +2,7 @@ use crate::common::QuestionType;
 use crate::webdriver::get_state::State::{Fuckd, JustClickNext, Question, UnknownQuestionType};
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, WebDriver};
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
@@ -12,6 +12,8 @@ pub enum State {
     /// - `1`: The language
     /// - `2`: The question itself
     Question(QuestionType, String, String),
+    /// This fucker is special so it gets its own enum variant
+    MatchQuestion(Vec<String>, String),
     JustClickNext,
     Fuckd,
     UnknownQuestionType(String),
@@ -109,9 +111,35 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                 }
 
                 "challenge-match" => {
-                    let question_test = driver.find_element(By::Css("div")).await?;
+                    let rt = tokio::runtime::Handle::current();
+                    let mut questions = vec![];
 
-                    todo!("Actually implement this")
+                    // Get all of the listed questions
+                    for element in driver
+                        .find_elements(
+                            By::Css(r#"[data-test="challenge challenge-match"] > div > div > div > div > div:nth-child(1) > div > button"#)
+                        )
+                        .await?
+                        .into_iter() {
+
+                        let text = element.text().await?;
+                        let span_text = element
+                            .find_element(By::Tag("span"))
+                            .await?
+                            .text()
+                            .await?;
+
+                        questions.push(text
+                            .strip_prefix(&span_text)
+                            .unwrap()
+                            .strip_prefix("\n")
+                            .unwrap()
+                            .to_string());
+                    }
+
+                    info!("Questions: {questions:?}");
+
+                    Ok(State::MatchQuestion(questions, language))
                 }
 
                 "challenge-listenTap" => return Ok(State::IgnoreQuestion),

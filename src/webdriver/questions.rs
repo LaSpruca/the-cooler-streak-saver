@@ -102,9 +102,7 @@ pub async fn choose_answer_underline_test(
     correct_answer: String,
 ) -> WebDriverResult<Option<String>> {
     let possibles = driver
-        .find_elements(By::Css(
-            r#"[data-test="challenge-choice"] > div > span[dir]"#,
-        ))
+        .find_elements(By::Css(r#"div > [data-test="challenge-tap-token"] > span"#))
         .await?;
     debug!("Found element");
 
@@ -204,3 +202,5 @@ pub async fn ignore_question(driver: &WebDriver) -> WebDriverResult<()> {
 
     Ok(())
 }
+
+// pub async fn answer_match(driver: &web)

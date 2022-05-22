@@ -169,6 +169,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
             State::IgnoreQuestion => {
                 discard_question(&tx).await.unwrap();
             }
+            State::MatchQuestion(_, _) => {}
         }
     }
 }
