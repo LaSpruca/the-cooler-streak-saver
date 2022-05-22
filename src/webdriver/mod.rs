@@ -82,6 +82,9 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
 
     let mut caps = DesiredCapabilities::chrome();
 
+    // Disable notification popup
+    caps.add_chrome_arg("--disable-notifications")?;
+
     if let Ok(chrome_path) = env::var("CHROME_PATH") {
         info!("Using chrome path {chrome_path}");
         caps.set_binary(&chrome_path)?;

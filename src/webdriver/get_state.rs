@@ -13,6 +13,7 @@ pub enum State {
     /// - `1`: The language
     /// - `2`: The question itself
     Question(QuestionType, String, String),
+    // EndLessonSlide,
     /// This fucker is special so it gets its own enum variant
     MatchQuestion(Vec<String>, String),
     JustClickNext,
@@ -161,7 +162,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                     Ok(State::MatchQuestion(questions, language))
                 }
 
-                "challenge-listenTap" => return Ok(State::IgnoreQuestion),
+                "challenge-listenTap" | "challenge-speak" => return Ok(State::IgnoreQuestion),
 
                 _ => Ok(UnknownQuestionType(question_type)),
             }

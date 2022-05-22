@@ -301,9 +301,10 @@ async fn brute_force(driver: &WebDriver, question: &String) -> WebDriverResult<S
             let answer = text.strip_prefix(other_text.as_str()).unwrap().strip_prefix("\n").unwrap();
             if select_pair(driver, question, answer).await? {
                 return Ok(answer.to_string());
+                delay!(500);
             }
             // Select Pair takes 800ms for animation
-            delay!(820);
+            delay!(1000);
         }
     }
 
