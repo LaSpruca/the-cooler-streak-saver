@@ -54,6 +54,7 @@ pub enum Signal {
     AnswerQuestion(String, QuestionType),
     IgnoreQuestion,
     MultiAnswerQuestion(HashMap<String, Option<String>>),
+    YeetDuoMarketing,
 }
 
 #[derive(Debug)]
@@ -161,7 +162,7 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                 }
                 Signal::AnswerQuestion(ans, question_type) => {
                     let res = match question_type {
-                        QuestionType::Translate => type_translation_with_btn(&driver, ans).await,
+                        QuestionType::Translate => type_translation(&driver, ans).await,
                         QuestionType::Select => choose_answer(&driver, ans).await,
                         QuestionType::Assist => choose_answer_assist(&driver, ans).await,
                         QuestionType::TapComplete => {
@@ -192,6 +193,12 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                             .unwrap(),
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     }
+                }
+                Signal::YeetDuoMarketing => {
+                    match click_nothanks(&driver).await {
+                        Ok(_) => sender.send(Response::Success).await.unwrap(),
+                        Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
+                    };
                 }
             }
         }
@@ -360,6 +367,22 @@ pub async fn answer_multi_question(
             Response::MultiAnswerResponse(res) => {
                 delay!(500);
                 Ok(res)
+            }
+            Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
+            _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),
+        },
+        None => Err(Error::NoDriverResponse),
+    }
+}
+
+pub async fn yeet_duo_marking(tx: &WebdriverSender) -> Result<(), Error> {
+    let (res_tx, mut rx) = channel(2);
+    tx.send((Signal::YeetDuoMarketing, res_tx)).await.unwrap();
+    match rx.recv().await {
+        Some(signal) => match signal {
+            Response::Success => {
+                delay!(500);
+                Ok(())
             }
             Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
             _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),

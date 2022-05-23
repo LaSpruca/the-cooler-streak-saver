@@ -9,7 +9,7 @@ use crate::db::models::{NewQuestion, Question};
 use crate::db::{create_connection, run_migrations, DbConnection};
 use crate::webdriver::{
     answer_multi_question, answer_question, discard_question, get_state, next, skip_question,
-    start_language, State, WebdriverSender,
+    start_language, yeet_duo_marking, State, WebdriverSender,
 };
 use diesel::prelude::*;
 use dotenv::dotenv;
@@ -232,6 +232,9 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                         info!("Registered {:#?}", qu)
                     }
                 }
+            }
+            State::PlusScreen => {
+                yeet_duo_marking(&tx).await.unwrap();
             }
         }
     }

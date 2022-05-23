@@ -65,6 +65,8 @@ pub async fn skip(driver: &WebDriver) -> WebDriverResult<String> {
         .click()
         .await?;
 
+    delay!(500);
+
     let correct = driver
         .find_element(By::Css(
             r#"[data-test="blame blame-incorrect"] > div > div> div > div"#,
@@ -208,32 +210,30 @@ pub async fn choose_answer_underline_test(
     }
 }
 
-pub async fn type_translation_with_btn(
-    driver: &WebDriver,
-    correct_answer: String,
-) -> WebDriverResult<Option<String>> {
-    delay!(100);
-    let keybd_button = driver
-        .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
-        .await?;
-
-    debug!("{}", keybd_button.text().await?);
-    if keybd_button.text().await?.to_lowercase() == "use keyboard" {
-        keybd_button.click().await?;
-    }
-
-    type_translation(driver, correct_answer).await
-}
-
 pub async fn type_translation(
     driver: &WebDriver,
     correct_answer: String,
 ) -> WebDriverResult<Option<String>> {
+    delay!(100);
+    if let Ok(keybd_button) = driver
+        .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
+        .await
+    {
+        debug!("{}", keybd_button.text().await?);
+        if keybd_button.text().await?.to_lowercase() == "use keyboard" {
+            keybd_button.click().await?;
+        }
+    }
+
     driver
-        .find_element(By::Css(r#"[data-test="challenge-translate-input"]"#))
+        .find_element(By::Css(
+            r#"[data-test="challenge-translate-input"], [data-test="challenge-text-input"]"#,
+        ))
         .await?
         .send_keys(correct_answer)
         .await?;
+
+    delay!(100);
 
     check_answer_full(&driver).await
 }
@@ -307,9 +307,9 @@ pub async fn answer_match(
 ) -> WebDriverResult<HashMap<String, String>> {
     let mut response = HashMap::new();
     let mut questions_priority_order: Vec<(&String, &Option<String>)> = questions.iter().collect();
-    questions_priority_order.sort_by(|a,b| {
-        let a_answered = if a.1.is_none() {0} else {1};
-        let b_answered = if b.1.is_none() {0} else {1};
+    questions_priority_order.sort_by(|a, b| {
+        let a_answered = if a.1.is_none() { 0 } else { 1 };
+        let b_answered = if b.1.is_none() { 0 } else { 1 };
         a_answered.cmp(&b_answered)
     });
 
@@ -379,4 +379,12 @@ async fn select_multi<'a>(
     return Err(WebDriverError::NoSuchElement(WebDriverErrorInfo::new(
         "¯\\_(ツ)_/¯",
     )));
+}
+
+pub async fn click_nothanks(driver: &WebDriver) -> WebDriverResult<()> {
+    driver
+        .find_element(By::Css(r#"button[data-test="plus-no-thanks"]"#))
+        .await?
+        .click()
+        .await
 }

@@ -1,6 +1,7 @@
 use crate::common::QuestionType;
 use crate::delay;
 use crate::webdriver::get_state::State::{Fuckd, JustClickNext, Question, UnknownQuestionType};
+use crate::State::PlusScreen;
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, WebDriver};
 use tracing::{debug, info};
@@ -20,6 +21,7 @@ pub enum State {
     Fuckd,
     UnknownQuestionType(String),
     IgnoreQuestion,
+    PlusScreen,
 }
 
 pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
@@ -169,7 +171,9 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                     Ok(State::MatchQuestion(questions, language))
                 }
 
-                "challenge-listenTap" | "challenge-speak" => return Ok(State::IgnoreQuestion),
+                "challenge-listenTap" | "challenge-speak" | "challenge-listenComplete" => {
+                    return Ok(State::IgnoreQuestion)
+                }
 
                 "challenge-name" => {
                     let text = driver
@@ -186,6 +190,11 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
         } else {
             Ok(JustClickNext)
         }
+    } else if let Ok(_) = driver
+        .find_element(By::Css(r#"button[data-test="plus-no-thanks"]"#))
+        .await
+    {
+        Ok(PlusScreen)
     } else {
         Ok(Fuckd)
     }
