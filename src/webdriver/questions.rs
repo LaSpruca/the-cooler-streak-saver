@@ -67,13 +67,7 @@ pub async fn skip(driver: &WebDriver) -> WebDriverResult<String> {
 
     delay!(500);
 
-    let correct = driver
-        .find_element(By::Css(
-            r#"[data-test="blame blame-incorrect"] > div > div> div > div"#,
-        ))
-        .await?
-        .text()
-        .await?;
+    let correct = get_answer_text(&driver).await?.unwrap();
 
     click_next(driver).await?;
 
@@ -104,11 +98,13 @@ pub async fn skip_underline(driver: &WebDriver) -> WebDriverResult<String> {
 }
 
 pub async fn click_next(driver: &WebDriver) -> WebDriverResult<()> {
+    debug!("Clicking Next!");
     driver
         .find_element(By::Css(r#"button[data-test="player-next"]"#))
         .await?
         .click()
         .await?;
+    debug!("Clicked Next!");
 
     Ok(())
 }
@@ -221,7 +217,7 @@ pub async fn type_translation(
     {
         debug!("{}", keybd_button.text().await?);
         let text = keybd_button.text().await?.to_lowercase();
-        if text == "use keyboard" || text == "make easier" {
+        if text == "use keyboard" || text == "make harder" {
             keybd_button.click().await?;
         }
     }
@@ -280,8 +276,8 @@ pub async fn here_is_tip(
             if check_answer_full(&driver).await?.is_some() {
                 // Incorrect, so we now have to click next
                 click_next(driver).await?;
-                return Ok(None)
             }
+            return Ok(None);
         }
     }
     unreachable!()
@@ -297,9 +293,10 @@ pub async fn type_translation_complete(
         .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
         .await
     {
-        debug!("{}", keybd_button.text().await?);
         let text = keybd_button.text().await?.to_lowercase();
-        if text == "use keyboard" || text == "make easier" {
+        debug!("Switching input: {}?", text);
+        if text == "use keyboard" || text == "make harder" {
+            debug!("Switched.");
             keybd_button.click().await?;
         }
     }
@@ -320,23 +317,41 @@ pub async fn type_translation_complete(
 /// Click the "check" and checks to see if the answer was correct, if it is incorrect, the full
 /// answer is returned
 async fn check_answer_full(driver: &WebDriver) -> WebDriverResult<Option<String>> {
+    
     click_next(&driver).await?;
     delay!(500);
 
-    let result = if let Ok(correct_display) = driver
-        .find_element(By::Css(
-            r#"[data-test="blame blame-incorrect"] > div > div> div > div"#,
-        ))
-        .await
-    {
-        Some(correct_display.text().await?)
-    } else {
-        None
-    };
+    let result = get_answer_text(&driver).await?;
 
     click_next(&driver).await?;
 
     Ok(result)
+}
+
+async fn get_answer_text(driver: &WebDriver) -> WebDriverResult<Option<String>> {
+    let answer_box = match driver.find_element(By::Css(r#"[data-test="blame blame-incorrect"]"#)).await {
+        Ok(web_element)=> web_element,
+        Err(_) => {
+            return Ok(None)
+        }
+    };
+
+
+    if let Ok(header_elm) = answer_box.find_element(By::Css("h2")).await
+    {
+        let header_text = header_elm.text().await?;
+        let answer_text = header_elm.find_element(By::XPath("following-sibling::div")).await?.text().await?;
+
+        // Handle case when duolingo gives quadratic answer (multiple options)
+
+        if header_text.to_lowercase().contains("solutions") {
+            return Ok(Some(String::from(answer_text.split_once(",").unwrap_or((&answer_text,"")).0)))
+        } else {
+            return Ok(Some(answer_text));
+        }
+    } else {
+        return Ok(None)
+    }
 }
 
 /// Click the "check" and checks to see if the answer was correct, if it is incorrect, only the
@@ -345,9 +360,17 @@ async fn check_answer_underline(driver: &WebDriver) -> WebDriverResult<Option<St
     click_next(&driver).await?;
     delay!(500);
 
-    let underlined = driver
+    let answer_box = match driver.find_element(By::Css(r#"[data-test="blame blame-incorrect"]"#)).await {
+        Ok(web_element)=> web_element,
+        Err(_) => {
+            click_next(&driver).await?;
+            return Ok(None)
+        }
+    };
+
+    let underlined = answer_box
         .find_elements(By::Css(
-            r#"[data-test="blame blame-incorrect"] > div > div > div > div > span > span[class]"#,
+            r#"div > div > div > div > span > span[class]"#,
         ))
         .await?;
 

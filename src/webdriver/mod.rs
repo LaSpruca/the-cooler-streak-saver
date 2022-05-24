@@ -87,6 +87,7 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
     // Disable notification popup
     caps.add_chrome_arg("--disable-notifications")?;
 
+
     if let Ok(chrome_path) = env::var("CHROME_PATH") {
         info!("Using chrome path {chrome_path}");
         caps.set_binary(&chrome_path)?;
@@ -106,6 +107,10 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
         &caps,
     )
     .await?;
+
+    // Remove all alerts
+    driver.execute_script("window.alert = function() {};").await?;
+    driver.execute_script("window.onbeforeunload = function() {};").await?;
 
     let (signal_in, mut signal_out) = channel::<(Signal, Sender<Response>)>(25);
 
@@ -273,7 +278,7 @@ pub async fn start_language(tx: &WebdriverSender) -> Result<(), Error> {
 
 pub async fn answer_here_is_a_tip(tx: &WebdriverSender) -> Result<(), Error> {
     let (res_tx, mut rx) = channel(2);
-    tx.send((Signal::StartLanguage, res_tx)).await.unwrap();
+    tx.send((Signal::HereIsATip, res_tx)).await.unwrap();
     match rx.recv().await {
         Some(signal) => match signal {
             Response::Success => {

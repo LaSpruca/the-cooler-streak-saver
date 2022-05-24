@@ -56,9 +56,9 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
             let question_type = question
                 .get_attribute("data-test")
                 .await?
-                .unwrap_or(String::from("challenge no-question-data-attribute"))
+                .unwrap_or(String::new())
                 .strip_prefix("challenge ")
-                .unwrap()
+                .unwrap_or("no-question-data-attribute")
                 .to_string();
 
             debug!("Found got question type");
@@ -145,7 +145,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                     }
 
                     let text = driver
-                        .find_element(By::Css(r#"[data-test="challenge challenge-completeReverseTranslation"] > div > div > div > div> div> div > div"#))
+                        .find_element(By::Css(r#"[data-test="challenge challenge-completeReverseTranslation"] > div > div > div > div > div > div > span"#))
                         .await?
                         .text()
                         .await?;

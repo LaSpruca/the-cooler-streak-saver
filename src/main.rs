@@ -142,6 +142,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                     }
                 } else {
                     let ans = answers.get(0).unwrap();
+                    assert!(ans.answer.len()!=0);
 
                     if let Some(updated) =
                         answer_question(&tx, ans.answer.clone(), ans.question_type.clone())
