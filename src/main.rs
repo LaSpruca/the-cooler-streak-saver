@@ -8,8 +8,8 @@ use crate::common::QuestionType;
 use crate::db::models::{NewQuestion, Question};
 use crate::db::{create_connection, run_migrations, DbConnection};
 use crate::webdriver::{
-    answer_multi_question, answer_question, discard_question, get_state, next, skip_question,
-    start_language, yeet_duo_marking, State, WebdriverSender,
+    answer_multi_question, answer_question, click_on_button, discard_question, get_state, next,
+    skip_question, start_language, State, WebdriverSender,
 };
 use diesel::prelude::*;
 use dotenv::dotenv;
@@ -19,7 +19,7 @@ use tokio::signal::ctrl_c;
 use tracing::{error, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
-use webdriver::{start_lesson, answer_here_is_a_tip};
+use webdriver::{answer_here_is_a_tip, start_lesson};
 
 mod common;
 mod db;
@@ -142,7 +142,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                     }
                 } else {
                     let ans = answers.get(0).unwrap();
-                    assert!(ans.answer.len()!=0);
+                    assert!(ans.answer.len() != 0);
 
                     if let Some(updated) =
                         answer_question(&tx, ans.answer.clone(), ans.question_type.clone())
@@ -236,10 +236,14 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                 }
             }
             State::PlusScreen => {
-                yeet_duo_marking(&tx).await.unwrap();
+                click_on_button(&tx, "plus-no-thanks").await.unwrap();
             }
+            State::Legendary => click_on_button(&tx, "maybe-later").await.unwrap(),
             State::HereIsATip => {
                 answer_here_is_a_tip(&tx).await.unwrap();
+            }
+            State::Loading => {
+                delay!(100);
             }
         }
     }

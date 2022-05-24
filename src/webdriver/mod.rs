@@ -54,8 +54,8 @@ pub enum Signal {
     AnswerQuestion(String, QuestionType),
     IgnoreQuestion,
     MultiAnswerQuestion(HashMap<String, Option<String>>),
-    YeetDuoMarketing,
-    HereIsATip
+    ClickOn(&'static str),
+    HereIsATip,
 }
 
 #[derive(Debug)]
@@ -87,7 +87,6 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
     // Disable notification popup
     caps.add_chrome_arg("--disable-notifications")?;
 
-
     if let Ok(chrome_path) = env::var("CHROME_PATH") {
         info!("Using chrome path {chrome_path}");
         caps.set_binary(&chrome_path)?;
@@ -109,8 +108,12 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
     .await?;
 
     // Remove all alerts
-    driver.execute_script("window.alert = function() {};").await?;
-    driver.execute_script("window.onbeforeunload = function() {};").await?;
+    driver
+        .execute_script("window.alert = function() {};")
+        .await?;
+    driver
+        .execute_script("window.onbeforeunload = function() {};")
+        .await?;
 
     let (signal_in, mut signal_out) = channel::<(Signal, Sender<Response>)>(25);
 
@@ -181,6 +184,9 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         QuestionType::CompleteTranslation => {
                             type_translation_complete(&driver, ans).await
                         }
+                        QuestionType::GapFill => {
+                            todo!()
+                        }
                     };
 
                     match res {
@@ -203,8 +209,8 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     }
                 }
-                Signal::YeetDuoMarketing => {
-                    match click_nothanks(&driver).await {
+                Signal::ClickOn(data_text) => {
+                    match click_on(&driver, data_text).await {
                         Ok(_) => sender.send(Response::Success).await.unwrap(),
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
@@ -406,9 +412,9 @@ pub async fn answer_multi_question(
     }
 }
 
-pub async fn yeet_duo_marking(tx: &WebdriverSender) -> Result<(), Error> {
+pub async fn click_on_button(tx: &WebdriverSender, button: &'static str) -> Result<(), Error> {
     let (res_tx, mut rx) = channel(2);
-    tx.send((Signal::YeetDuoMarketing, res_tx)).await.unwrap();
+    tx.send((Signal::ClickOn(button), res_tx)).await.unwrap();
     match rx.recv().await {
         Some(signal) => match signal {
             Response::Success => {

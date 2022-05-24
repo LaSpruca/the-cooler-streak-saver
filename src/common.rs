@@ -22,6 +22,7 @@ pub enum QuestionType {
     MatchPairs,
     Name,
     CompleteTranslation,
+    GapFill,
 }
 
 impl<DB: Backend> ToSql<Text, DB> for QuestionType
@@ -40,6 +41,7 @@ where
             QuestionType::MatchPairs => "matchPairs",
             QuestionType::Name => "name",
             QuestionType::CompleteTranslation => "completeTranslation",
+            QuestionType::GapFill => "gapFill",
         };
 
         v.to_sql(out)
@@ -60,6 +62,7 @@ where
             "matchPairs" => QuestionType::MatchPairs,
             "name" => QuestionType::Name,
             "completeTranslation" => QuestionType::CompleteTranslation,
+            "gapFill" => QuestionType::GapFill,
             _ => return Err("Unrecognized question type, tf are you on?".into()),
         })
     }

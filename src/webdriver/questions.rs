@@ -234,14 +234,10 @@ pub async fn type_translation(
 
     check_answer_full(&driver).await
 }
-pub async fn here_is_tip(
-    driver: &WebDriver,
-) -> WebDriverResult<Option<String>>  {
-
-
+pub async fn here_is_tip(driver: &WebDriver) -> WebDriverResult<Option<String>> {
     let potential_question_targets = driver
-    .find_elements(By::Css(r#"div > div > div > span"#))
-    .await?;
+        .find_elements(By::Css(r#"div > div > div > span"#))
+        .await?;
 
     // Filter for spans with *no attributes*
     let mut pure_spans = vec![];
@@ -249,27 +245,25 @@ pub async fn here_is_tip(
         // Jank, I know
         if element.outer_html().await?.starts_with("<span>") {
             let element_text = element.text().await?;
-            pure_spans.push((element,element_text))
+            pure_spans.push((element, element_text))
         }
-    };
+    }
 
-    pure_spans.sort_by(|a,b| a.1.len().cmp(&b.1.len()));
-    if pure_spans.len()==0 || pure_spans.len() > 4 {
+    pure_spans.sort_by(|a, b| a.1.len().cmp(&b.1.len()));
+    if pure_spans.len() == 0 || pure_spans.len() > 4 {
         // No idea what's happening, try to ignore
         click_next(driver).await?;
-        return Ok(None)
+        return Ok(None);
     }
     let likely_question_text = pure_spans[0].1.clone();
 
     let possibles = driver
-        .find_elements(By::Css(
-            r#"[data-test="challenge-choice"] > div"#,
-        ))
+        .find_elements(By::Css(r#"[data-test="challenge-choice"] > div"#))
         .await?;
 
     for (i, possible) in possibles.iter().enumerate() {
         // Check if possible is contained within question, otherwise just choose last
-        if likely_question_text.contains(&possible.text().await?) || i==possibles.len()-1 {
+        if likely_question_text.contains(&possible.text().await?) || i == possibles.len() - 1 {
             possible.click().await?;
             click_next(driver).await?;
             // Check to see if the question was answered correctly
@@ -282,7 +276,6 @@ pub async fn here_is_tip(
     }
     unreachable!()
 }
-
 
 pub async fn type_translation_complete(
     driver: &WebDriver,
@@ -317,7 +310,6 @@ pub async fn type_translation_complete(
 /// Click the "check" and checks to see if the answer was correct, if it is incorrect, the full
 /// answer is returned
 async fn check_answer_full(driver: &WebDriver) -> WebDriverResult<Option<String>> {
-    
     click_next(&driver).await?;
     delay!(500);
 
@@ -329,28 +321,33 @@ async fn check_answer_full(driver: &WebDriver) -> WebDriverResult<Option<String>
 }
 
 async fn get_answer_text(driver: &WebDriver) -> WebDriverResult<Option<String>> {
-    let answer_box = match driver.find_element(By::Css(r#"[data-test="blame blame-incorrect"]"#)).await {
-        Ok(web_element)=> web_element,
-        Err(_) => {
-            return Ok(None)
-        }
+    let answer_box = match driver
+        .find_element(By::Css(r#"[data-test="blame blame-incorrect"]"#))
+        .await
+    {
+        Ok(web_element) => web_element,
+        Err(_) => return Ok(None),
     };
 
-
-    if let Ok(header_elm) = answer_box.find_element(By::Css("h2")).await
-    {
+    if let Ok(header_elm) = answer_box.find_element(By::Css("h2")).await {
         let header_text = header_elm.text().await?;
-        let answer_text = header_elm.find_element(By::XPath("following-sibling::div")).await?.text().await?;
+        let answer_text = header_elm
+            .find_element(By::XPath("following-sibling::div"))
+            .await?
+            .text()
+            .await?;
 
         // Handle case when duolingo gives quadratic answer (multiple options)
 
         if header_text.to_lowercase().contains("solutions") {
-            return Ok(Some(String::from(answer_text.split_once(",").unwrap_or((&answer_text,"")).0)))
+            return Ok(Some(String::from(
+                answer_text.split_once(",").unwrap_or((&answer_text, "")).0,
+            )));
         } else {
             return Ok(Some(answer_text));
         }
     } else {
-        return Ok(None)
+        return Ok(None);
     }
 }
 
@@ -360,18 +357,19 @@ async fn check_answer_underline(driver: &WebDriver) -> WebDriverResult<Option<St
     click_next(&driver).await?;
     delay!(500);
 
-    let answer_box = match driver.find_element(By::Css(r#"[data-test="blame blame-incorrect"]"#)).await {
-        Ok(web_element)=> web_element,
+    let answer_box = match driver
+        .find_element(By::Css(r#"[data-test="blame blame-incorrect"]"#))
+        .await
+    {
+        Ok(web_element) => web_element,
         Err(_) => {
             click_next(&driver).await?;
-            return Ok(None)
+            return Ok(None);
         }
     };
 
     let underlined = answer_box
-        .find_elements(By::Css(
-            r#"div > div > div > div > span > span[class]"#,
-        ))
+        .find_elements(By::Css(r#"div > div > div > div > span > span[class]"#))
         .await?;
 
     let result = if underlined.is_empty() {
@@ -483,9 +481,9 @@ async fn select_multi<'a>(
     )));
 }
 
-pub async fn click_nothanks(driver: &WebDriver) -> WebDriverResult<()> {
+pub async fn click_on(driver: &WebDriver, data_test: &str) -> WebDriverResult<()> {
     driver
-        .find_element(By::Css(r#"button[data-test="plus-no-thanks"]"#))
+        .find_element(By::Css(&format!(r#"button[data-test="{data_test}"]"#)))
         .await?
         .click()
         .await

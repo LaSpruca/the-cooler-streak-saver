@@ -1,7 +1,7 @@
 use crate::common::QuestionType;
 use crate::delay;
 use crate::webdriver::get_state::State::{Fuckd, JustClickNext, Question, UnknownQuestionType};
-use crate::State::PlusScreen;
+use crate::State::{Legendary, Loading, PlusScreen};
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, WebDriver};
 use tracing::{debug, info};
@@ -22,7 +22,9 @@ pub enum State {
     UnknownQuestionType(String),
     IgnoreQuestion,
     PlusScreen,
-    HereIsATip
+    HereIsATip,
+    Loading,
+    Legendary,
 }
 
 pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
@@ -40,10 +42,15 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
         }
     }
     // Check if there is a next button
-    else if let Ok(_) = driver
+    else if let Ok(btn) = driver
         .find_element(By::Css(r#"button[data-test="player-next"]"#))
         .await
     {
+        // Check to see if the loading button is going brrr
+        if let Ok(_) = btn.find_element(By::Css("div")).await {
+            return Ok(Loading);
+        }
+
         debug!("Found next button");
         // Check for the challenge div
         if let Ok(question) = driver
@@ -128,13 +135,14 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         .find_element(By::Css(r#"[data-test="challenge-translate-input"]"#))
                         .await
                         .is_err()
-                    {  
-
+                    {
                         delay!(500);
-                        let make_harder_text =  driver
+                        let make_harder_text = driver
                             .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
-                                .await?.text().await?;
-                            
+                            .await?
+                            .text()
+                            .await?;
+
                         if make_harder_text.contains("HARDER") {
                             driver
                                 .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
@@ -199,9 +207,21 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                     Ok(Question(QuestionType::Name, language, text))
                 }
 
+                "challenge-gapFill" => {
+                    let text = driver
+                        .find_element(By::Css(
+                            r#"[data-test="challenge challenge-gapFill"] > div > div> div"#,
+                        ))
+                        .await?
+                        .text()
+                        .await?;
+
+                    Ok(Question(QuestionType::GapFill, language, text))
+                }
+
                 "no-question-data-attribute" => {
                     // Currently, I think only "Here's a tip" does this
-                    
+
                     Ok(State::HereIsATip)
                 }
 
@@ -215,6 +235,11 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
         .await
     {
         Ok(PlusScreen)
+    } else if let Ok(_) = driver
+        .find_element(By::Css(r#"[data-test="final-level-promo"]"#))
+        .await
+    {
+        Ok(Legendary)
     } else {
         Ok(Fuckd)
     }
