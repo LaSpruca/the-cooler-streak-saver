@@ -149,7 +149,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         .await?
                         .text()
                         .await?;
-                    Ok(Question(QuestionType::Translate, language, text))
+                    Ok(Question(QuestionType::CompleteTranslation, language, text))
                 }
 
                 "challenge-match" => {
@@ -184,9 +184,10 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                     Ok(State::MatchQuestion(questions, language))
                 }
 
-                "challenge-listenTap" | "challenge-listen" | "challenge-speak" | "challenge-listenComplete" => {
-                    return Ok(State::IgnoreQuestion)
-                }
+                "challenge-listenTap"
+                | "challenge-listen"
+                | "challenge-speak"
+                | "challenge-listenComplete" => return Ok(State::IgnoreQuestion),
 
                 "challenge-name" => {
                     let text = driver

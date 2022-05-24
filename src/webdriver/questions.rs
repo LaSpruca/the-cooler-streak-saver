@@ -220,7 +220,8 @@ pub async fn type_translation(
         .await
     {
         debug!("{}", keybd_button.text().await?);
-        if keybd_button.text().await?.to_lowercase() == "use keyboard" {
+        let text = keybd_button.text().await?.to_lowercase();
+        if text == "use keyboard" || text == "make easier" {
             keybd_button.click().await?;
         }
     }
@@ -286,6 +287,35 @@ pub async fn here_is_tip(
     unreachable!()
 }
 
+
+pub async fn type_translation_complete(
+    driver: &WebDriver,
+    correct_answer: String,
+) -> WebDriverResult<Option<String>> {
+    delay!(100);
+    if let Ok(keybd_button) = driver
+        .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
+        .await
+    {
+        debug!("{}", keybd_button.text().await?);
+        let text = keybd_button.text().await?.to_lowercase();
+        if text == "use keyboard" || text == "make easier" {
+            keybd_button.click().await?;
+        }
+    }
+
+    driver
+        .find_element(By::Css(
+            r#"[data-test="challenge-translate-input"], [data-test="challenge-text-input"]"#,
+        ))
+        .await?
+        .send_keys(correct_answer)
+        .await?;
+
+    delay!(100);
+
+    check_answer_underline(&driver).await
+}
 
 /// Click the "check" and checks to see if the answer was correct, if it is incorrect, the full
 /// answer is returned

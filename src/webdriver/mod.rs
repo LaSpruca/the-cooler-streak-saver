@@ -173,6 +173,9 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         QuestionType::MatchPairs => {
                             unreachable!()
                         }
+                        QuestionType::CompleteTranslation => {
+                            type_translation_complete(&driver, ans).await
+                        }
                     };
 
                     match res {
