@@ -22,6 +22,7 @@ pub enum State {
     UnknownQuestionType(String),
     IgnoreQuestion,
     PlusScreen,
+    HereIsATip
 }
 
 pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
@@ -55,7 +56,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
             let question_type = question
                 .get_attribute("data-test")
                 .await?
-                .unwrap()
+                .unwrap_or(String::from("challenge no-question-data-attribute"))
                 .strip_prefix("challenge ")
                 .unwrap()
                 .to_string();
@@ -127,8 +128,20 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         .find_element(By::Css(r#"[data-test="challenge-translate-input"]"#))
                         .await
                         .is_err()
-                    {
-                        delay!(100)
+                    {  
+
+                        delay!(500);
+                        let make_harder_text =  driver
+                            .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
+                                .await?.text().await?;
+                            
+                        if make_harder_text.contains("HARDER") {
+                            driver
+                                .find_element(By::Css(r#"[data-test="player-toggle-keyboard"]"#))
+                                .await?
+                                .click()
+                                .await?;
+                        }
                     }
 
                     let text = driver
@@ -171,7 +184,7 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                     Ok(State::MatchQuestion(questions, language))
                 }
 
-                "challenge-listenTap" | "challenge-speak" | "challenge-listenComplete" => {
+                "challenge-listenTap" | "challenge-listen" | "challenge-speak" | "challenge-listenComplete" => {
                     return Ok(State::IgnoreQuestion)
                 }
 
@@ -183,6 +196,12 @@ pub async fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
                         .await?;
 
                     Ok(Question(QuestionType::Name, language, text))
+                }
+
+                "no-question-data-attribute" => {
+                    // Currently, I think only "Here's a tip" does this
+                    
+                    Ok(State::HereIsATip)
                 }
 
                 _ => Ok(UnknownQuestionType(question_type)),

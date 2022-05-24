@@ -237,6 +237,55 @@ pub async fn type_translation(
 
     check_answer_full(&driver).await
 }
+pub async fn here_is_tip(
+    driver: &WebDriver,
+) -> WebDriverResult<Option<String>>  {
+
+
+    let potential_question_targets = driver
+    .find_elements(By::Css(r#"div > div > div > span"#))
+    .await?;
+
+    // Filter for spans with *no attributes*
+    let mut pure_spans = vec![];
+    for element in potential_question_targets {
+        // Jank, I know
+        if element.outer_html().await?.starts_with("<span>") {
+            let element_text = element.text().await?;
+            pure_spans.push((element,element_text))
+        }
+    };
+
+    pure_spans.sort_by(|a,b| a.1.len().cmp(&b.1.len()));
+    if pure_spans.len()==0 || pure_spans.len() > 4 {
+        // No idea what's happening, try to ignore
+        click_next(driver).await?;
+        return Ok(None)
+    }
+    let likely_question_text = pure_spans[0].1.clone();
+
+    let possibles = driver
+        .find_elements(By::Css(
+            r#"[data-test="challenge-choice"] > div"#,
+        ))
+        .await?;
+
+    for (i, possible) in possibles.iter().enumerate() {
+        // Check if possible is contained within question, otherwise just choose last
+        if likely_question_text.contains(&possible.text().await?) || i==possibles.len()-1 {
+            possible.click().await?;
+            click_next(driver).await?;
+            // Check to see if the question was answered correctly
+            if check_answer_full(&driver).await?.is_some() {
+                // Incorrect, so we now have to click next
+                click_next(driver).await?;
+                return Ok(None)
+            }
+        }
+    }
+    unreachable!()
+}
+
 
 /// Click the "check" and checks to see if the answer was correct, if it is incorrect, the full
 /// answer is returned

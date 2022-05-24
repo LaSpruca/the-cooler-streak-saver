@@ -55,6 +55,7 @@ pub enum Signal {
     IgnoreQuestion,
     MultiAnswerQuestion(HashMap<String, Option<String>>),
     YeetDuoMarketing,
+    HereIsATip
 }
 
 #[derive(Debug)]
@@ -200,6 +201,12 @@ pub async fn open_browser() -> WebDriverResult<WebdriverSender> {
                         Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
                     };
                 }
+                Signal::HereIsATip => {
+                    match here_is_tip(&driver).await {
+                        Ok(_) => sender.send(Response::Success).await.unwrap(),
+                        Err(ex) => sender.send(Response::WebDriverError(ex)).await.unwrap(),
+                    };
+                }
             }
         }
     });
@@ -246,6 +253,22 @@ pub async fn get_state(tx: &WebdriverSender) -> Result<State, Error> {
 }
 
 pub async fn start_language(tx: &WebdriverSender) -> Result<(), Error> {
+    let (res_tx, mut rx) = channel(2);
+    tx.send((Signal::StartLanguage, res_tx)).await.unwrap();
+    match rx.recv().await {
+        Some(signal) => match signal {
+            Response::Success => {
+                delay!(5000);
+                Ok(())
+            }
+            Response::WebDriverError(ex) => Err(Error::WebDriverError(ex)),
+            _ => Err(Error::UnexpectedDriverResponse(Box::new(signal))),
+        },
+        None => Err(Error::NoDriverResponse),
+    }
+}
+
+pub async fn answer_here_is_a_tip(tx: &WebdriverSender) -> Result<(), Error> {
     let (res_tx, mut rx) = channel(2);
     tx.send((Signal::StartLanguage, res_tx)).await.unwrap();
     match rx.recv().await {

@@ -19,7 +19,7 @@ use tokio::signal::ctrl_c;
 use tracing::{error, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
-use webdriver::start_lesson;
+use webdriver::{start_lesson, answer_here_is_a_tip};
 
 mod common;
 mod db;
@@ -169,6 +169,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
             }
             State::UnknownQuestionType(kind) => {
                 info!("Unknown question type: {kind}");
+                delay!(500)
             }
             State::IgnoreQuestion => {
                 discard_question(&tx).await.unwrap();
@@ -235,6 +236,9 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
             }
             State::PlusScreen => {
                 yeet_duo_marking(&tx).await.unwrap();
+            }
+            State::HereIsATip => {
+                answer_here_is_a_tip(&tx).await.unwrap();
             }
         }
     }
