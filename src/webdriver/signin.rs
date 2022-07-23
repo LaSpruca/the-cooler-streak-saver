@@ -3,7 +3,7 @@ use std::env;
 use std::time::Duration;
 use thirtyfour::error::WebDriverError;
 use thirtyfour::{By, WebDriver};
-use tokio::time::Instant;
+use tokio::time::{Instant, sleep};
 use tracing::debug;
 
 pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
@@ -63,9 +63,18 @@ pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
         if time_elapsed.elapsed() > timout {
             break;
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
+
     }
     debug!("Logged In");
+
+    // Checks for "welcome back" message and dismisses it
+    let no_thanks_button = driver.find_element(By::Css("button[data-test=\"notification-drawer-no-thanks-button\"]")).await;
+    if no_thanks_button.is_ok() {
+        debug!("Found welcome back message, dismissing");
+        no_thanks_button.unwrap().click().await?;
+        sleep(Duration::from_millis(200)).await;
+    }
 
     // Check to see if login is successful
     if !driver.current_url().await?.ends_with("learn") {
