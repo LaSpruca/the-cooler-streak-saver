@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::time::Duration;
+use std::thread::sleep;
 use std::{env, time::Instant};
 use thirtyfour_sync::error::WebDriverError;
 use thirtyfour_sync::{By, WebDriver, WebDriverCommands};
@@ -86,6 +87,14 @@ pub fn browser_login(driver: &WebDriver) -> Result<(), SignInError> {
     }
 
     debug!("Logged In");
+
+    // Checks for "welcome back" message and dismisses it
+    let no_thanks_button = driver.find_element(By::Css("button[data-test=\"notification-drawer-no-thanks-button\"]"));
+    if no_thanks_button.is_ok() {
+        debug!("Found welcome back message, dismissing");
+        no_thanks_button.unwrap().click()?;
+        sleep(Duration::from_millis(200));
+    }
 
     // Check to see if login is successful
     if !driver.current_url()?.ends_with("learn") {
