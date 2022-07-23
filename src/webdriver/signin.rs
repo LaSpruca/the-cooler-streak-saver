@@ -1,52 +1,72 @@
-use super::Error;
-use std::env;
+use std::fmt::Display;
 use std::time::Duration;
-use thirtyfour::error::WebDriverError;
-use thirtyfour::{By, WebDriver};
-use tokio::time::Instant;
+use std::{env, time::Instant};
+use thirtyfour_sync::error::WebDriverError;
+use thirtyfour_sync::{By, WebDriver, WebDriverCommands};
 use tracing::debug;
 
-pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
+#[derive(thiserror::Error, Debug)]
+pub enum SignInError {
+    NoUsername,
+    NoPassword,
+    WebDriverError(WebDriverError),
+    InvalidUsername,
+    InvalidPassword,
+    UnknownError,
+}
+
+impl Display for SignInError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SignInError::WebDriverError(ex) => write!(f, "{ex}"),
+            SignInError::InvalidUsername => write!(f, "The username is invalid"),
+            SignInError::InvalidPassword => write!(f, "The password is invalid"),
+            SignInError::UnknownError => write!(f, "There was an unknown error"),
+            SignInError::NoUsername => write!(f, "There is no username"),
+            SignInError::NoPassword => write!(f, "There is no password"),
+        }
+    }
+}
+
+impl From<WebDriverError> for SignInError {
+    fn from(val: WebDriverError) -> Self {
+        Self::WebDriverError(val)
+    }
+}
+
+pub fn browser_login(driver: &WebDriver) -> Result<(), SignInError> {
     // Get the username and password from env vars
     let username = match env::var("DUOLINGO_USERNAME") {
         Ok(val) => val,
-        Err(_) => return Err(Error::NoUsername),
+        Err(_) => return Err(SignInError::NoUsername),
     };
     let password = match env::var("DUOLINGO_PASSWORD") {
         Ok(val) => val,
-        Err(_) => return Err(Error::NoPassword),
+        Err(_) => return Err(SignInError::NoPassword),
     };
 
     // Go to duolingo.com
-    driver.get("https://duolingo.com").await?;
+    driver.get("https://duolingo.com")?;
 
     // Click the login button
     driver
-        .find_element(By::Css("button[data-test=\"have-account\"]"))
-        .await?
-        .click()
-        .await?;
+        .find_element(By::Css("button[data-test=\"have-account\"]"))?
+        .click()?;
 
     // Input the email
     driver
-        .find_element(By::Css("input[data-test=\"email-input\"]"))
-        .await?
-        .send_keys(&username)
-        .await?;
+        .find_element(By::Css("input[data-test=\"email-input\"]"))?
+        .send_keys(&username)?;
 
     // Input the password
     driver
-        .find_element(By::Css(r#"input[data-test="password-input"]"#))
-        .await?
-        .send_keys(&password)
-        .await?;
+        .find_element(By::Css(r#"input[data-test="password-input"]"#))?
+        .send_keys(&password)?;
 
     // Click the login button
     driver
-        .find_element(By::Css(r#"button[data-test="register-button"]"#))
-        .await?
-        .click()
-        .await?;
+        .find_element(By::Css(r#"button[data-test="register-button"]"#))?
+        .click()?;
 
     // Give duolingo max 20 seconds to login
     let time_elapsed = Instant::now();
@@ -54,38 +74,35 @@ pub async fn browser_login(driver: &WebDriver) -> Result<(), Error> {
     debug!("Logging In...");
 
     // While either not on the learn page, or can't find the skill tree
-    while driver.current_url().await? != "https://www.duolingo.com/learn"
+    while driver.current_url()? != "https://www.duolingo.com/learn"
         || driver
             .find_element(By::Css("div[data-test=\"skill-tree\"]"))
-            .await
             .is_err()
     {
         if time_elapsed.elapsed() > timout {
             break;
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        std::thread::sleep(Duration::from_millis(100));
     }
+
     debug!("Logged In");
 
     // Check to see if login is successful
-    if !driver.current_url().await?.ends_with("learn") {
-        match driver
-            .find_element(By::Css(r#"div[data-test="invalid-form-field"]"#))
-            .await
-        {
+    if !driver.current_url()?.ends_with("learn") {
+        match driver.find_element(By::Css(r#"div[data-test="invalid-form-field"]"#)) {
             Ok(div) => {
-                return if div.text().await?.contains("Duolingo account") {
-                    Err(Error::InvalidUsername(username))
-                } else if div.text().await?.contains("password") {
-                    Err(Error::InvalidPassword(username))
+                return if div.text()?.contains("Duolingo account") {
+                    Err(SignInError::InvalidUsername)
+                } else if div.text()?.contains("password") {
+                    Err(SignInError::InvalidPassword)
                 } else {
-                    Err(Error::ThereIsAnErrorForSomeReason)
+                    Err(SignInError::UnknownError)
                 };
             }
             Err(err) => match err {
                 WebDriverError::NoSuchElement(_) => {}
                 _ => {
-                    return Err(Error::ThereIsAnErrorForSomeReason);
+                    return Err(SignInError::UnknownError);
                 }
             },
         }

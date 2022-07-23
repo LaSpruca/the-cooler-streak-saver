@@ -8,7 +8,7 @@ use std::io;
 #[macro_export]
 macro_rules! delay {
     ($time:literal) => {
-        tokio::time::sleep(std::time::Duration::from_millis($time)).await
+        std::thread::sleep(std::time::Duration::from_millis($time))
     };
 }
 

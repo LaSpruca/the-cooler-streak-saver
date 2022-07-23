@@ -4,29 +4,28 @@ extern crate diesel;
 extern crate diesel_migrations;
 extern crate core;
 
-use crate::common::QuestionType;
-use crate::db::models::{NewQuestion, Question};
-use crate::db::{create_connection, run_migrations, DbConnection};
-use crate::webdriver::{
-    answer_multi_question, answer_question, click_on_button, discard_question, get_state, next,
-    skip_question, start_language, State, WebdriverSender,
+use crate::{
+    common::QuestionType,
+    db::{
+        create_connection,
+        models::{NewQuestion, Question},
+        run_migrations, DbConnection,
+    },
+    webdriver::*,
 };
 use diesel::prelude::*;
 use dotenv::dotenv;
-use std::collections::HashMap;
-use std::process::exit;
-use tokio::signal::ctrl_c;
+use std::{collections::HashMap, process::exit};
+use thirtyfour_sync::{prelude::WebDriverResult, WebDriver};
 use tracing::{error, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
-use webdriver::{answer_here_is_a_tip, start_lesson};
 
 mod common;
 mod db;
 mod webdriver;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     // Load .env file
     match dotenv() {
         Ok(_) => {}
@@ -54,7 +53,7 @@ async fn main() {
     };
 
     // Open a chrome window with thirtyfour
-    let tx = match webdriver::open_browser().await {
+    let driver = match webdriver::open_browser() {
         Ok(d) => d,
         Err(e) => {
             error!("Could not load webdriver {e}");
@@ -62,31 +61,19 @@ async fn main() {
         }
     };
 
-    // Setup control_c handler to quit the chrome instance
-    // let yeet = tx.clone();
-    // tokio::spawn(async move {
-    //     ctrl_c().await.unwrap();
-    //     info!("Control c'd");
-    //     webdriver::quit(yeet).await;
-    //     exit(0);
-    // });
+    if let Err(ex) = run(driver, db) {
+        error!("{ex}");
+        loop {}
+    }
 
     // Run the main application with panic capture so that the chrome window can be closed
-    match tokio::spawn(run(tx.clone(), db)).await {
-        Err(e) => {
-            if e.is_panic() {
-                error!("Application panicked");
-            }
-        }
-        _ => {}
-    };
 
     // Yeet chrome, because fuck you
-    // webdriver::quit(tx).await;
+    // webdriver::quit(driver);
 }
 
-async fn run(tx: WebdriverSender, db_conn: DbConnection) {
-    match webdriver::sign_in(&tx).await {
+fn run(driver: WebDriver, db_conn: DbConnection) -> WebDriverResult<()> {
+    match webdriver::browser_login(&driver) {
         Ok(_) => {}
         Err(err) => {
             error!("{}", err);
@@ -95,7 +82,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
     };
 
     loop {
-        let state = match get_state(&tx).await {
+        let state = match get_state(&driver) {
             Ok(d) => d,
             Err(ex) => {
                 error!("{ex}");
@@ -105,10 +92,10 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
 
         match state {
             State::StartLanguage => {
-                start_language(&tx).await.unwrap();
+                start_intro(&driver)?;
             }
             State::StartLesson => {
-                start_lesson(&tx).await.unwrap();
+                next_skill_tree_item(&driver)?;
             }
             State::Question(qtype, lang, qu) => {
                 info!("Question: Type = {qtype:?}, language = {lang}, question = {qu}");
@@ -125,7 +112,12 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                 };
 
                 if answers.is_empty() {
-                    let ans = skip_question(&tx, qtype).await.unwrap();
+                    let ans = if qtype.check_underline() {
+                        skip_underline(&driver)?
+                    } else {
+                        skip(&driver)?
+                    };
+
                     {
                         use db::schema::questions;
                         let qu = NewQuestion {
@@ -138,16 +130,16 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                             .values(qu.clone())
                             .execute(&db_conn)
                             .unwrap();
+
                         info!("Registered {:#?}", qu)
                     }
                 } else {
                     let ans = answers.get(0).unwrap();
+
                     assert!(ans.answer.len() != 0);
 
                     if let Some(updated) =
-                        answer_question(&tx, ans.answer.clone(), ans.question_type.clone())
-                            .await
-                            .unwrap()
+                        answer_question(&driver, ans.question_type.clone(), ans.answer.clone())?
                     {
                         use db::schema::questions::dsl::{answer, questions};
                         diesel::update(questions.find(ans.id))
@@ -162,7 +154,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                 }
             }
             State::JustClickNext => {
-                next(&tx).await.unwrap();
+                click_next(&driver)?;
             }
             State::Fuckd => {
                 error!("Unable to determine application state");
@@ -173,7 +165,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                 delay!(500)
             }
             State::IgnoreQuestion => {
-                discard_question(&tx).await.unwrap();
+                ignore_question(&driver)?;
             }
             State::MatchQuestion(questions, lang) => {
                 let answers = questions
@@ -197,16 +189,14 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                     })
                     .collect::<HashMap<String, Option<Question>>>();
 
-                let correct = answer_multi_question(
-                    &tx,
-                    answers
+                let correct = answer_match(
+                    &driver,
+                    &answers
                         .clone()
                         .into_iter()
                         .map(|(k, v)| (k, v.map(|v| v.answer.to_string())))
                         .collect(),
-                )
-                .await
-                .unwrap();
+                )?;
 
                 for (qu, updated) in correct.iter() {
                     if let Some(ans) = answers.get(qu).unwrap() {
@@ -215,6 +205,7 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                             .set(answer.eq(answer.clone()))
                             .execute(&db_conn)
                             .unwrap();
+
                         info!(
                             "Updating answer to question `{qu}` (lang: {lang}, type: {:?}), to {updated}",
                             QuestionType::MatchPairs
@@ -236,11 +227,11 @@ async fn run(tx: WebdriverSender, db_conn: DbConnection) {
                 }
             }
             State::PlusScreen => {
-                click_on_button(&tx, "plus-no-thanks").await.unwrap();
+                click_on(&driver, "plus-no-thanks")?;
             }
-            State::Legendary => click_on_button(&tx, "maybe-later").await.unwrap(),
+            State::Legendary => click_on(&driver, "maybe-later")?,
             State::HereIsATip => {
-                answer_here_is_a_tip(&tx).await.unwrap();
+                here_is_tip(&driver)?;
             }
             State::Loading => {
                 delay!(100);
