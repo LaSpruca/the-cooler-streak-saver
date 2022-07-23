@@ -1,10 +1,10 @@
 use std::fmt::Display;
-use std::time::Duration;
 use std::thread::sleep;
+use std::time::Duration;
 use std::{env, time::Instant};
 use thirtyfour_sync::error::WebDriverError;
 use thirtyfour_sync::{By, WebDriver, WebDriverCommands};
-use tracing::debug;
+use tracing::{debug, error, warn};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SignInError {
@@ -83,16 +83,48 @@ pub fn browser_login(driver: &WebDriver) -> Result<(), SignInError> {
         if time_elapsed.elapsed() > timout {
             break;
         }
-        std::thread::sleep(Duration::from_millis(100));
+        sleep(Duration::from_millis(100));
     }
 
     debug!("Logged In");
 
+    // Next up, enable prefer-reduced-motion
+    match driver.execute_script(
+        r#"
+        try {
+            let settings = JSON.parse(localStorage.getItem("duo.state"));
+            settings.browserSettings.prefersReducedMotion = true;
+            localStorage.setItem("duo.state", JSON.stringify(settings));    
+        } catch (e) {
+            console.log(e);
+        }
+    "#,
+    ) {
+        Ok(_) => {
+            debug!("Prefer reduced motion enabled, refreshing");
+            // Reload to apply the changes
+            driver.refresh()?;
+        }
+        Err(ex) => {
+            warn!("Could not set prefers-reduced-motion: {}", ex);
+        }
+    }
+
+    sleep(Duration::from_millis(400));
+
     // Checks for "welcome back" message and dismisses it
-    let no_thanks_button = driver.find_element(By::Css("button[data-test=\"notification-drawer-no-thanks-button\"]"));
-    if no_thanks_button.is_ok() {
+    while let Ok(no_thanks_button) = driver.find_element(By::Css(
+        "button[data-test=\"notification-drawer-no-thanks-button\"]",
+    )) {
         debug!("Found welcome back message, dismissing");
-        no_thanks_button.unwrap().click()?;
+        match no_thanks_button.click() {
+            Ok(_) => {
+                debug!("Dismissed welcome back message");
+            }
+            Err(ex) => {
+                debug!("Could not dismiss welcome back message: {}", ex);
+            }
+        };
         sleep(Duration::from_millis(200));
     }
 

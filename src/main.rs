@@ -15,8 +15,8 @@ use crate::{
 };
 use diesel::prelude::*;
 use dotenv::dotenv;
-use std::{collections::HashMap, process::exit};
-use thirtyfour_sync::{prelude::WebDriverResult, WebDriver};
+use std::{collections::HashMap, io, process::exit, thread::sleep};
+use thirtyfour_sync::{error::WebDriverError, prelude::WebDriverResult, WebDriver};
 use tracing::{error, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -61,23 +61,25 @@ fn main() {
         }
     };
 
-    if let Err(ex) = run(driver, db) {
+    if let Err(ex) = run(&driver, db) {
         error!("{ex}");
-        loop {}
+        loop {
+            sleep(std::time::Duration::from_secs(1));
+        }
     }
 
     // Run the main application with panic capture so that the chrome window can be closed
-
-    // Yeet chrome, because fuck you
-    // webdriver::quit(driver);
 }
 
-fn run(driver: WebDriver, db_conn: DbConnection) -> WebDriverResult<()> {
+fn run(driver: &WebDriver, db_conn: DbConnection) -> WebDriverResult<()> {
     match webdriver::browser_login(&driver) {
         Ok(_) => {}
         Err(err) => {
             error!("{}", err);
-            panic!("Error signing in");
+            return Err(WebDriverError::IoError(io::Error::new(
+                io::ErrorKind::Other,
+                "Could not login to browser",
+            )));
         }
     };
 

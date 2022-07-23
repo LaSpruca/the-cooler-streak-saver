@@ -1,3 +1,6 @@
+use std::thread::sleep;
+use std::time::Duration;
+
 use crate::common::QuestionType;
 use crate::delay;
 use crate::webdriver::get_state::State::{Fuckd, JustClickNext, Question, UnknownQuestionType};
@@ -48,6 +51,7 @@ pub fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
         // Check for the challenge div
         if let Ok(question) = driver.find_element(By::Css(r#"div[data-test*="challenge"]"#)) {
             debug!("Found challenge div");
+            sleep(Duration::from_secs(1));
 
             // Get the question type from the data-test attribute
             let question_type = question
@@ -152,17 +156,14 @@ pub fn get_state(driver: &WebDriver) -> WebDriverResult<State> {
 
                         let text = element.text()?;
                         let span_text = element
-                            .find_element(By::Tag("span"))
-                            ?
-                            .text()
-                            ?;
-
-                        questions.push(text
+                            .find_element(By::Tag("span"))?
+                            .text()?;
+                        if let Some(Some(text)) = text
                             .strip_prefix(&span_text)
-                            .unwrap()
-                            .strip_prefix("\n")
-                            .unwrap()
-                            .to_string());
+                            .map(|f| f.strip_prefix("\n")) {
+                            questions.push(text.to_string());
+                        }
+
                     }
 
                     info!("Questions: {questions:?}");
